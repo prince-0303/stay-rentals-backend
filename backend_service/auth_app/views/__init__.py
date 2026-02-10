@@ -18,19 +18,17 @@ from .profile_views import (
     UserProfileView,
 )
 
-from .admin_views import (
-    UserListView,
-)
-
 from .oauth_views import (
     GoogleLoginView,
     GoogleLoginTokenView,
 )
 
 from .kyc_views import (
-    KYCSubmissionView,
+    KYCStatusView,
+    KYCResubmissionView,
     KYCApprovalView,
     KYCPendingListView,
+    KYCAllListersView,
 )
 
 __all__ = [
@@ -50,15 +48,14 @@ __all__ = [
     # Profile
     'UserProfileView',
     
-    # Admin
-    'UserListView',
-    
     # OAuth
     'GoogleLoginView',
     'GoogleLoginTokenView',
 
-     # KYC
-    'KYCSubmissionView',
+    # KYC
+    'KYCStatusView',
+    'KYCResubmissionView',
     'KYCApprovalView',
     'KYCPendingListView',
+    'KYCAllListersView',
 ]

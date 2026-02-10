@@ -2,6 +2,7 @@ from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, Permis
 from django.db import models
 from django.utils import timezone
 from django.core.validators import RegexValidator
+from cloudinary.models import CloudinaryField
 
 
 class UserManager(BaseUserManager):
@@ -78,11 +79,13 @@ class User(AbstractBaseUser, PermissionsMixin):
     )
 
     # KYC Status
+    KYC_NOT_SUBMITTED = 'not_submitted'
     KYC_PENDING = 'pending'
     KYC_APPROVED = 'approved'
     KYC_REJECTED = 'rejected'
 
     KYC_STATUS_CHOICES = [
+        (KYC_NOT_SUBMITTED, 'Not Submitted'),
         (KYC_PENDING, 'Pending'),
         (KYC_APPROVED, 'Approved'),
         (KYC_REJECTED, 'Rejected'),
@@ -91,13 +94,43 @@ class User(AbstractBaseUser, PermissionsMixin):
     kyc_status = models.CharField(
         max_length=20,
         choices=KYC_STATUS_CHOICES,
-        default=KYC_PENDING
+        default=KYC_NOT_SUBMITTED
     )
 
     is_kyc_submitted = models.BooleanField(default=False)
     kyc_submitted_at = models.DateTimeField(blank=True, null=True)
     kyc_verified_at = models.DateTimeField(blank=True, null=True)
-
+    
+    # AADHAAR - UPDATED with front and back
+    aadhar_number = models.CharField(
+        max_length=12,
+        blank=True,
+        null=True,
+        unique=True,
+        help_text="12-digit Aadhaar number"
+    )
+    
+    aadhar_front_image = CloudinaryField(
+        'image',
+        folder='kyc/aadhar/front',
+        blank=True,
+        null=True,
+        help_text="Aadhaar card front image"
+    )
+    
+    aadhar_back_image = CloudinaryField(
+        'image',
+        folder='kyc/aadhar/back',
+        blank=True,
+        null=True,
+        help_text="Aadhaar card back image"
+    )
+    
+    kyc_rejection_reason = models.TextField(
+        blank=True,
+        null=True,
+        help_text="Reason for KYC rejection"
+    )
     
     # Email Verification
     is_email_verified = models.BooleanField(default=False)
@@ -171,9 +204,6 @@ class User(AbstractBaseUser, PermissionsMixin):
 class OTP(models.Model):
     """
     OTP model for email verification and password reset.
-    
-    For email_verification: user=NULL, pending_data stores registration info
-    For password_reset: user is set, pending_data is NULL
     """
     
     OTP_TYPE_CHOICES = [
@@ -185,18 +215,18 @@ class OTP(models.Model):
         User, 
         on_delete=models.CASCADE, 
         related_name='otps',
-        null=True,  # ⭐ CHANGED: Allow NULL for email verification
+        null=True,
         blank=True
     )
     
-    email = models.EmailField(db_index=True)  # ⭐ ADDED
+    email = models.EmailField(db_index=True)
     otp_code = models.CharField(max_length=6)
     otp_type = models.CharField(max_length=20, choices=OTP_TYPE_CHOICES)
     is_used = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     expires_at = models.DateTimeField()
     
-    pending_data = models.JSONField(null=True, blank=True)  # ⭐ ADDED: Stores registration data
+    pending_data = models.JSONField(null=True, blank=True)
     
     class Meta:
         db_table = 'otps'

@@ -6,7 +6,7 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from ..models import User
-from ..serializers import UserLoginSerializer, UserSerializer, get_tokens_for_user
+from ..serializers import UserLoginSerializer, UserLoginResponseSerializer, get_tokens_for_user
 
 
 class UserLoginView(APIView):
@@ -16,7 +16,6 @@ class UserLoginView(APIView):
     def post(self, request):
         serializer = UserLoginSerializer(data=request.data, context={'request': request})
         
-        # Validate credentials
         if not serializer.is_valid():
             return Response(
                 {'detail': 'Invalid email or password', 'errors': serializer.errors},
@@ -25,14 +24,12 @@ class UserLoginView(APIView):
         
         user = serializer.validated_data['user']
         
-        # Check 1: Account active
         if not user.is_active:
             return Response(
                 {'detail': 'Your account has been disabled. Please contact support.'},
                 status=status.HTTP_403_FORBIDDEN
             )
         
-        # Check 2: Email verification (only for email/password users)
         if not user.is_email_verified:
             return Response(
                 {
@@ -43,7 +40,6 @@ class UserLoginView(APIView):
                 status=status.HTTP_403_FORBIDDEN
             )
         
-        # Check 3: KYC for listers only
         if user.role == User.LISTER:
             if user.kyc_status == User.KYC_PENDING:
                 return Response(
@@ -74,11 +70,9 @@ class UserLoginView(APIView):
                     status=status.HTTP_403_FORBIDDEN
                 )
         
-        # All checks passed - generate tokens
         try:
             tokens = get_tokens_for_user(user)
             
-            # Update last login
             user.last_login = timezone.now()
             user.save(update_fields=['last_login'])
             
@@ -86,7 +80,7 @@ class UserLoginView(APIView):
                 'message': 'Login successful',
                 'access': tokens['access'],
                 'refresh': tokens['refresh'],
-                'user': UserSerializer(user).data,
+                'user': UserLoginResponseSerializer(user).data,
             }, status=status.HTTP_200_OK)
             
         except Exception as e:
