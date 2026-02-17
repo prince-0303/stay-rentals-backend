@@ -4,10 +4,13 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.parsers import MultiPartParser, FormParser
+import cloudinary.uploader
+from cloudinary.exceptions import Error as CloudinaryError
 
 from ..models import User
 from ..permissions import IsAdmin
-
+import logging
+logger = logging.getLogger(__name__)
 
 class KYCStatusView(APIView):
     """Get KYC status for current user (lister only)"""
@@ -22,7 +25,6 @@ class KYCStatusView(APIView):
                 status=status.HTTP_403_FORBIDDEN
             )
         
-        # Mask aadhar number (show only last 4 digits)
         masked_aadhar = None
         if user.aadhar_number:
             masked_aadhar = 'XXXX-XXXX-' + user.aadhar_number[-4:]
@@ -41,7 +43,9 @@ class KYCStatusView(APIView):
 
 
 class KYCResubmissionView(APIView):
-    """Lister resubmits KYC after rejection"""
+    """
+    Lister submits/resubmits KYC with Cloudinary upload
+    """
     permission_classes = [IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser]
     
@@ -54,54 +58,139 @@ class KYCResubmissionView(APIView):
                 status=status.HTTP_403_FORBIDDEN
             )
         
-        if user.kyc_status != User.KYC_REJECTED:
+        if user.kyc_status not in [User.KYC_NOT_SUBMITTED, User.KYC_REJECTED]:
             return Response(
-                {'detail': 'You can only resubmit after rejection.'},
+                {'detail': f'Cannot submit KYC. Current status: {user.kyc_status}'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Get new data
         aadhar_number = request.data.get('aadhar_number', '').strip()
         aadhar_front = request.FILES.get('aadhar_front')
         aadhar_back = request.FILES.get('aadhar_back')
         
-        # Validate
-        if not aadhar_number or len(aadhar_number) != 12 or not aadhar_number.isdigit():
+        if not aadhar_number:
             return Response(
-                {'detail': 'Valid 12-digit Aadhar number required.'},
+                {'detail': 'Aadhar number is required.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if len(aadhar_number) != 12 or not aadhar_number.isdigit():
+            return Response(
+                {'detail': 'Aadhar number must be exactly 12 digits.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
         if not aadhar_front or not aadhar_back:
             return Response(
-                {'detail': 'Both front and back images required.'},
+                {'detail': 'Both front and back images of Aadhar card are required.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Check if aadhar already exists (excluding current user)
+        allowed_extensions = ['jpg', 'jpeg', 'png']
+        for file_obj, file_name in [(aadhar_front, 'Front image'), (aadhar_back, 'Back image')]:
+            if file_obj:
+                ext = file_obj.name.split('.')[-1].lower()
+                if ext not in allowed_extensions:
+                    return Response(
+                        {'detail': f'{file_name} must be JPG, JPEG, or PNG.'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                
+                if file_obj.size > 10 * 1024 * 1024:
+                    return Response(
+                        {'detail': f'{file_name} size must not exceed 10MB.'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+        
         if User.objects.filter(aadhar_number=aadhar_number).exclude(id=user.id).exists():
             return Response(
-                {'detail': 'This Aadhar number is already registered.'},
+                {'detail': 'This Aadhar number is already registered with another account.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Update user
-        user.aadhar_number = aadhar_number
-        user.aadhar_front_image = aadhar_front
-        user.aadhar_back_image = aadhar_back
-        user.is_kyc_submitted = True
-        user.kyc_submitted_at = timezone.now()
-        user.kyc_status = User.KYC_PENDING
-        user.kyc_rejection_reason = None
-        user.save()
+        try:
+            logger.info(f"Uploading KYC documents for user {user.email}")
+            
+            front_upload = cloudinary.uploader.upload(
+                aadhar_front,
+                folder=f'kyc/aadhar/front',
+                resource_type='image',
+                public_id=f'user_{user.id}_front_{timezone.now().timestamp()}',
+                overwrite=True,
+                invalidate=True,
+                transformation=[
+                    {'width': 1200, 'height': 1200, 'crop': 'limit'},
+                    {'quality': 'auto:good'}
+                ]
+            )
+            
+            back_upload = cloudinary.uploader.upload(
+                aadhar_back,
+                folder=f'kyc/aadhar/back',
+                resource_type='image',
+                public_id=f'user_{user.id}_back_{timezone.now().timestamp()}',
+                overwrite=True,
+                invalidate=True,
+                transformation=[
+                    {'width': 1200, 'height': 1200, 'crop': 'limit'},
+                    {'quality': 'auto:good'}
+                ]
+            )
+            
+            logger.info(f"Cloudinary upload successful for user {user.email}")
+            logger.info(f"Front image URL: {front_upload.get('secure_url')}")
+            logger.info(f"Back image URL: {back_upload.get('secure_url')}")
+            
+            if user.aadhar_front_image:
+                try:
+                    old_front_public_id = user.aadhar_front_image.public_id
+                    cloudinary.uploader.destroy(old_front_public_id)
+                    logger.info(f"Deleted old front image: {old_front_public_id}")
+                except Exception as e:
+                    logger.warning(f"Could not delete old front image: {e}")
+            
+            if user.aadhar_back_image:
+                try:
+                    old_back_public_id = user.aadhar_back_image.public_id
+                    cloudinary.uploader.destroy(old_back_public_id)
+                    logger.info(f"Deleted old back image: {old_back_public_id}")
+                except Exception as e:
+                    logger.warning(f"Could not delete old back image: {e}")
+            
+            user.aadhar_number = aadhar_number
+            user.aadhar_front_image = front_upload['public_id']
+            user.aadhar_back_image = back_upload['public_id']
+            user.is_kyc_submitted = True
+            user.kyc_submitted_at = timezone.now()
+            user.kyc_status = User.KYC_PENDING
+            user.kyc_rejection_reason = None
+            user.save()
+            
+            logger.info(f"KYC submitted successfully for user {user.email}")
+            
+            return Response(
+                {
+                    'detail': 'KYC submitted successfully. Admin will review your documents.',
+                    'kyc_status': user.kyc_status,
+                    'aadhar_front_url': front_upload['secure_url'],
+                    'aadhar_back_url': back_upload['secure_url'],
+                },
+                status=status.HTTP_200_OK
+            )
+            
+        except CloudinaryError as e:
+            logger.error(f"Cloudinary upload error for user {user.email}: {str(e)}")
+            return Response(
+                {'detail': f'Image upload failed: {str(e)}. Please try again.'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
         
-        return Response(
-            {
-                'detail': 'KYC resubmitted successfully. Admin will review your documents.',
-                'kyc_status': user.kyc_status,
-            },
-            status=status.HTTP_200_OK
-        )
+        except Exception as e:
+            logger.error(f"KYC submission error for user {user.email}: {str(e)}")
+            return Response(
+                {'detail': f'KYC submission failed: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
 class KYCApprovalView(APIView):
@@ -162,6 +251,8 @@ class KYCApprovalView(APIView):
             user.kyc_rejection_reason = None
             message = f'KYC approved for {user.email}. Lister can now login.'
             
+            logger.info(f"Admin approved KYC for user {user.email}")
+            
         elif action == 'reject':
             if not rejection_reason:
                 return Response(
@@ -172,6 +263,8 @@ class KYCApprovalView(APIView):
             user.kyc_status = User.KYC_REJECTED
             user.kyc_rejection_reason = rejection_reason
             message = f'KYC rejected for {user.email}. Reason: {rejection_reason}'
+            
+            logger.info(f"Admin rejected KYC for user {user.email}: {rejection_reason}")
             
         else:
             return Response(
