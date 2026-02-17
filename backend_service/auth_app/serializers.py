@@ -3,41 +3,27 @@ from django.contrib.auth import authenticate
 from django.contrib.auth.password_validation import validate_password
 from django.core.validators import RegexValidator
 from rest_framework_simplejwt.tokens import RefreshToken
-from .models import User, OTP
+from .models import User, OTP, MFAMethod, MFABackupCode
 
 
 class RegisterOrVerifySerializer(serializers.Serializer):
-    """
-    Handles both registration and verification
-    """
     email = serializers.EmailField(required=True)
-    
-    # Make these NOT required - we'll validate conditionally
-    password = serializers.CharField(
-        write_only=True,
-        required=False,
-        validators=[validate_password],
-    )
+    password = serializers.CharField(write_only=True, required=False, validators=[validate_password])
     password_confirm = serializers.CharField(write_only=True, required=False)
     first_name = serializers.CharField(required=False, max_length=150)
     last_name = serializers.CharField(required=False, max_length=150)
-    role = serializers.ChoiceField(
-        choices=[User.USER, User.LISTER],
-        default=User.USER,
-        required=False
-    )
+    role = serializers.ChoiceField(choices=[User.USER, User.LISTER], default=User.USER, required=False)
     phone_number = serializers.CharField(required=False, allow_blank=True)
-    
     otp = serializers.CharField(required=False, max_length=6, allow_blank=True)
     
     def validate(self, attrs):
         otp = attrs.get('otp', '').strip()
         
-        # VERIFICATION MODE: Only email + OTP needed
+        # Verification mode
         if otp:
             return attrs
         
-        # REGISTRATION MODE: All fields required
+        # Registration mode - all fields required
         required_fields = {
             'password': 'Password is required.',
             'password_confirm': 'Password confirmation is required.',
@@ -54,11 +40,9 @@ class RegisterOrVerifySerializer(serializers.Serializer):
         if errors:
             raise serializers.ValidationError(errors)
         
-        # Validate passwords match
         if attrs['password'] != attrs['password_confirm']:
             raise serializers.ValidationError({"password": "Passwords don't match."})
         
-        # Validate role
         if attrs.get('role') not in {User.USER, User.LISTER}:
             raise serializers.ValidationError({"role": "Invalid role."})
         
@@ -99,21 +83,12 @@ class UserLoginSerializer(serializers.Serializer):
 
 class PasswordResetRequestSerializer(serializers.Serializer):
     email = serializers.EmailField(required=True)
-    
-    def validate_email(self, value):
-        if not User.objects.filter(email=value).exists():
-            raise serializers.ValidationError("No account found.")
-        return value
 
 
 class PasswordResetConfirmSerializer(serializers.Serializer):
     email = serializers.EmailField(required=True)
     otp_code = serializers.CharField(required=True, max_length=6)
-    new_password = serializers.CharField(
-        required=True,
-        write_only=True,
-        validators=[validate_password],
-    )
+    new_password = serializers.CharField(required=True, write_only=True, validators=[validate_password])
     new_password_confirm = serializers.CharField(required=True, write_only=True)
     
     def validate(self, attrs):
@@ -124,11 +99,7 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
 
 class ChangePasswordSerializer(serializers.Serializer):
     old_password = serializers.CharField(required=True, write_only=True)
-    new_password = serializers.CharField(
-        required=True,
-        write_only=True,
-        validators=[validate_password],
-    )
+    new_password = serializers.CharField(required=True, write_only=True, validators=[validate_password])
     new_password_confirm = serializers.CharField(required=True, write_only=True)
     
     def validate(self, attrs):
@@ -155,95 +126,19 @@ class UserSerializer(serializers.ModelSerializer):
             'is_kyc_submitted', 'kyc_submitted_at', 'kyc_verified_at',
         ]
 
+
 class UserLoginResponseSerializer(serializers.ModelSerializer):
     name = serializers.CharField(source='get_full_name', read_only=True)
     
     class Meta:
         model = User
         fields = ['id', 'name', 'email', 'is_active', 'is_email_verified']
-        
+
 
 class UserUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ['first_name', 'last_name', 'phone_number', 'profile_picture']
-
-
-class KYCSubmissionSerializer(serializers.Serializer):
-    """Serializer for KYC Aadhaar submission"""
-    
-    aadhar_number = serializers.CharField(
-        max_length=12,
-        min_length=12,
-        required=True,
-        validators=[
-            RegexValidator(
-                regex=r'^\d{12}$',
-                message='Aadhaar number must be exactly 12 digits'
-            )
-        ],
-        help_text="12-digit Aadhaar number"
-    )
-    
-    aadhar_image = serializers.ImageField(
-        required=True,
-        help_text="Clear image of Aadhaar card"
-    )
-    
-    def validate_aadhar_number(self, value):
-        """Check if Aadhaar already exists"""
-        user = self.context.get('user')
-        if User.objects.filter(aadhar_number=value).exclude(id=user.id).exists():
-            raise serializers.ValidationError("This Aadhaar number is already registered.")
-        return value
-    
-    def validate_aadhar_image(self, value):
-        """Validate Aadhaar image"""
-        # Check file size (max 10MB)
-        if value.size > 10 * 1024 * 1024:
-            raise serializers.ValidationError("Image size should not exceed 10MB.")
-        
-        # Check file type
-        valid_extensions = ['jpg', 'jpeg', 'png']
-        ext = value.name.split('.')[-1].lower()
-        if ext not in valid_extensions:
-            raise serializers.ValidationError(
-                f"Only JPG, JPEG, PNG files are allowed."
-            )
-        
-        return value
-
-
-class KYCStatusSerializer(serializers.ModelSerializer):
-    """Serializer for KYC status display"""
-    
-    aadhar_image_url = serializers.SerializerMethodField()
-    
-    class Meta:
-        model = User
-        fields = [
-            'is_kyc_submitted',
-            'kyc_status',
-            'kyc_submitted_at',
-            'kyc_verified_at',
-            'aadhar_number',
-            'aadhar_image_url',
-            'kyc_rejection_reason',
-        ]
-        read_only_fields = fields
-    
-    def get_aadhar_image_url(self, obj):
-        """Get Cloudinary URL for Aadhaar image"""
-        if obj.aadhar_image:
-            return obj.aadhar_image.url
-        return None
-    
-    def to_representation(self, instance):
-        data = super().to_representation(instance)
-        # Mask Aadhaar number (show only last 4 digits to user)
-        if data.get('aadhar_number'):
-            data['aadhar_number'] = 'XXXX-XXXX-' + data['aadhar_number'][-4:]
-        return data
 
 
 def get_tokens_for_user(user):
@@ -256,3 +151,70 @@ def get_tokens_for_user(user):
         'refresh': str(refresh),
         'access': str(refresh.access_token),
     }
+
+
+# MFA Serializers
+
+class MFAMethodSerializer(serializers.ModelSerializer):
+    method_name = serializers.CharField(source='get_method_type_display', read_only=True)
+    qr_code_uri = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = MFAMethod
+        fields = [
+            'id', 'method_type', 'method_name', 'is_primary',
+            'is_enabled', 'verified_at', 'qr_code_uri', 'created_at',
+        ]
+        read_only_fields = ['id', 'verified_at', 'created_at']
+    
+    def get_qr_code_uri(self, obj):
+        if obj.method_type == 'totp' and not obj.verified_at:
+            return obj.get_totp_uri()
+        return None
+
+
+class MFASetupInitSerializer(serializers.Serializer):
+    method_type = serializers.ChoiceField(choices=['totp', 'email'], required=True)
+
+
+class MFAVerifySetupSerializer(serializers.Serializer):
+    method_type = serializers.ChoiceField(choices=['totp', 'email'], required=True)
+    code = serializers.CharField(required=True, min_length=6, max_length=6)
+    
+    def validate_code(self, value):
+        if not value.isdigit():
+            raise serializers.ValidationError('Code must be 6 digits.')
+        return value
+
+
+class MFALoginVerifySerializer(serializers.Serializer):
+    mfa_session_token = serializers.CharField(required=True)
+    code = serializers.CharField(required=True, min_length=6, max_length=8)
+    
+    def validate_code(self, value):
+        return value.strip().upper().replace(' ', '').replace('-', '')
+
+
+class MFADisableSerializer(serializers.Serializer):
+    password = serializers.CharField(required=True, write_only=True)
+    method_type = serializers.ChoiceField(choices=['totp', 'email', 'all'], required=True)
+
+
+class MFAStatusSerializer(serializers.Serializer):
+    mfa_enabled = serializers.BooleanField()
+    mfa_enforced = serializers.BooleanField()
+    methods = MFAMethodSerializer(many=True)
+    backup_codes_count = serializers.IntegerField()
+    requires_setup = serializers.BooleanField()
+    should_show_mfa_recommendation = serializers.BooleanField()
+
+
+class MFABackupCodesSerializer(serializers.Serializer):
+    codes = serializers.ListField(child=serializers.CharField())
+    message = serializers.CharField(
+        default="Save these backup codes in a secure location. Each code can only be used once."
+    )
+
+
+class MFASendCodeSerializer(serializers.Serializer):
+    method_type = serializers.ChoiceField(choices=['email'], required=True)
