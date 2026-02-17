@@ -75,8 +75,7 @@ class IsOwnerOrAdmin(permissions.BasePermission):
 
 class IsOwnerOrReadOnly(permissions.BasePermission):
     """
-    Permission class to allow read-only access to everyone,
-    but only allow owners to edit.
+    Permission class to allow read-only access to everyone, but only allow owners to edit.
     """
     
     def has_object_permission(self, request, view, obj):

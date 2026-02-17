@@ -116,8 +116,7 @@ def get_or_create_user_from_google(google_user_data):
                     'role': User.USER,
                 }
             )
-            
-            # If user already exists but signed up with email/password
+        
             if not created and not user.is_email_verified:
                 user.is_email_verified = True
                 user.save(update_fields=['is_email_verified'])
