@@ -30,11 +30,7 @@ class RegisterOrVerifyEmailView(APIView):
     
     def _handle_registration(self, data):
         """
-        Step 1: User Registration (NO KYC data collected here)
-        
-        For ALL users (regular & lister):
-        - Collect: email, password, name, role, phone
-        - DO NOT collect: Aadhar (that comes later via KYC endpoint)
+        User Registration (NO KYC data collected here)
         """
         
         # Extract fields
@@ -46,9 +42,7 @@ class RegisterOrVerifyEmailView(APIView):
         role = data.get('role', 'user').strip().lower()
         phone_number = data.get('phone_number', '').strip()
         
-        # ============================================
         # VALIDATION
-        # ============================================
         
         # Required fields
         if not all([email, password, password_confirm, first_name, last_name]):
@@ -79,9 +73,7 @@ class RegisterOrVerifyEmailView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # ============================================
         # CLEANUP OLD DATA
-        # ============================================
         
         # Delete unverified user with this email (allow re-registration)
         User.objects.filter(email=email, is_email_verified=False).delete()
@@ -89,9 +81,7 @@ class RegisterOrVerifyEmailView(APIView):
         # Delete old OTPs
         OTP.objects.filter(email=email, otp_type='email_verification').delete()
         
-        # ============================================
         # CREATE OTP WITH PENDING DATA
-        # ============================================
         
         otp_code = generate_otp()
         expires_at = timezone.now() + timedelta(minutes=10)
@@ -134,11 +124,7 @@ class RegisterOrVerifyEmailView(APIView):
     
     def _handle_verification(self, data):
         """
-        Step 2: Email Verification
-        
-        After verification:
-        - Regular users → Can login immediately ✅
-        - Listers → Must submit KYC before login ⚠️
+        Email Verification
         """
         
         email = data.get('email', '').strip().lower()
@@ -180,9 +166,7 @@ class RegisterOrVerifyEmailView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # ============================================
         # CREATE USER ACCOUNT
-        # ============================================
         
         try:
             with transaction.atomic():
