@@ -8,7 +8,7 @@ from django.db import transaction
 from django.conf import settings
 
 from ..models import User, OTP
-from ..serializers import RegisterOrVerifySerializer
+from ..serializers import RegisterOrVerifySerializer, ResendOTPSerializer
 from ..utils import generate_otp, send_otp_email
 
 
