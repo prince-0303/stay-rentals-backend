@@ -20,6 +20,18 @@ from .views import (
     KYCAllListersView,
 )
 
+from .views import (
+    MFAStatusView,
+    MFASetupInitView,
+    MFAVerifySetupView,
+    MFARegenerateBackupCodesView,
+    MFADisableView,
+    MFASendCodeView,
+    MFALoginVerifyView,
+)
+from .views import CookieTokenRefreshView
+
+
 
 urlpatterns = [
     # Authentication
@@ -43,10 +55,29 @@ urlpatterns = [
     
     # KYC - Lister
     path('kyc/status/', KYCStatusView.as_view(), name='kyc-status'),
-    path('kyc/resubmit/', KYCResubmissionView.as_view(), name='kyc-resubmit'),
+    path('kyc/submit/', KYCResubmissionView.as_view(), name='kyc-resubmit'),
     
     # KYC - Admin
     path('kyc/pending/', KYCPendingListView.as_view(), name='kyc-pending'),
     path('kyc/review/<int:user_id>/', KYCApprovalView.as_view(), name='kyc-review'),
     path('kyc/all/', KYCAllListersView.as_view(), name='kyc-all-listers'),
+    
+    # MFA Status
+    path('mfa/status/', MFAStatusView.as_view(), name='mfa-status'),
+    
+    # MFA Setup
+    path('mfa/setup/init/', MFASetupInitView.as_view(), name='mfa-setup-init'),
+    path('mfa/setup/verify/', MFAVerifySetupView.as_view(), name='mfa-setup-verify'),
+    
+    # MFA Management
+    path('mfa/backup-codes/regenerate/', MFARegenerateBackupCodesView.as_view(), name='mfa-regenerate-codes'),
+    path('mfa/disable/', MFADisableView.as_view(), name='mfa-disable'),
+    
+    # MFA Login Verification
+    path('mfa/send-code/', MFASendCodeView.as_view(), name='mfa-send-code'),
+    path('mfa/verify/', MFALoginVerifyView.as_view(), name='mfa-verify'),
+
+    # Token
+    path('token/refresh/', CookieTokenRefreshView.as_view(), name='token-refresh'),
+
 ]
