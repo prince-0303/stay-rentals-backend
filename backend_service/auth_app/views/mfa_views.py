@@ -457,7 +457,7 @@ class MFALoginVerifyView(APIView):
         
         response = Response(response_data, status=status.HTTP_200_OK)
 
-        # ✅ Set Access Token Cookie
+        # Access Token Cookie
         response.set_cookie(
             key='access_token',
             value=tokens['access'],
@@ -467,7 +467,7 @@ class MFALoginVerifyView(APIView):
             max_age=900,
         )
 
-        # ✅ Set Refresh Token Cookie
+        # Refresh Token Cookie
         response.set_cookie(
             key='refresh_token',
             value=tokens['refresh'],

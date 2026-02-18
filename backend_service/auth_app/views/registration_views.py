@@ -107,14 +107,14 @@ class RegisterOrVerifyEmailView(APIView):
         # Send OTP email
         send_otp_email(email, otp_code, 'email_verification')
         
-        if settings.DEBUG:
-            print(f"\n{'='*70}")
-            print(f"📧 REGISTRATION STARTED")
-            print(f"{'='*70}")
-            print(f"Email: {email}")
-            print(f"Role: {role}")
-            print(f"OTP: {otp_code}")
-            print(f"{'='*70}\n")
+        # if settings.DEBUG:
+        #     print(f"\n{'='*70}")
+        #     print(f"📧 REGISTRATION STARTED")
+        #     print(f"{'='*70}")
+        #     print(f"Email: {email}")
+        #     print(f"Role: {role}")
+        #     print(f"OTP: {otp_code}")
+        #     print(f"{'='*70}\n")
         
         return Response({
             'detail': 'Registration successful! Please verify your email with the OTP sent.',
@@ -202,15 +202,15 @@ class RegisterOrVerifyEmailView(APIView):
                 from ..serializers import get_tokens_for_user
                 tokens = get_tokens_for_user(user)
                 
-                if settings.DEBUG:
-                    print(f"\n{'='*70}")
-                    print(f"✅ USER CREATED & TOKENS GENERATED")
-                    print(f"{'='*70}")
-                    print(f"Email: {user.email}")
-                    print(f"Role: {user.role}")
-                    print(f"ID: {user.id}")
-                    print(f"Access Token: {tokens['access'][:50]}...")
-                    print(f"{'='*70}\n")
+                # if settings.DEBUG:
+                #     print(f"\n{'='*70}")
+                #     print(f"✅ USER CREATED & TOKENS GENERATED")
+                #     print(f"{'='*70}")
+                #     print(f"Email: {user.email}")
+                #     print(f"Role: {user.role}")
+                #     print(f"ID: {user.id}")
+                #     print(f"Access Token: {tokens['access'][:50]}...")
+                #     print(f"{'='*70}\n")
                 
                 # Different response based on role
                 if user.role == User.LISTER:

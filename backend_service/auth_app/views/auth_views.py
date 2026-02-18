@@ -8,7 +8,11 @@ from rest_framework_simplejwt.views import TokenRefreshView
 from rest_framework_simplejwt.exceptions import TokenError, InvalidToken
 
 from ..models import User, MFASession
-from ..serializers import UserLoginSerializer, UserLoginResponseSerializer, get_tokens_for_user
+from ..serializers import (
+    UserLoginSerializer, UserLoginResponseSerializer, get_tokens_for_user,
+    GoogleLoginSerializer, UserSerializer,
+)
+from ..google_oauth import exchange_code_for_token, verify_google_token, get_or_create_user_from_google
 from ..utils import (
     user_requires_mfa,
     user_has_mfa_enabled,
@@ -20,6 +24,39 @@ from ..utils import (
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+# ─── HELPERS ──────────────────────────────────────────────────────────────────
+
+def _set_auth_cookies(response, tokens):
+    """Attach access_token and refresh_token as httpOnly cookies."""
+    response.set_cookie(
+        key='access_token',
+        value=tokens['access'],
+        httponly=True,
+        secure=False,
+        samesite='Lax',
+        max_age=900,
+    )
+    response.set_cookie(
+        key='refresh_token',
+        value=tokens['refresh'],
+        httponly=True,
+        secure=False,
+        samesite='Lax',
+        max_age=604800,
+    )
+    return response
+
+
+def _get_mfa_message(mfa_method):
+    if not mfa_method:
+        return 'Please verify with your MFA method.'
+    if mfa_method.method_type == 'totp':
+        return 'Please enter the 6-digit code from your authenticator app.'
+    elif mfa_method.method_type == 'email':
+        return 'A verification code has been sent to your email.'
+    return 'Please verify with your MFA method.'
 
 
 # ─── LOGIN ────────────────────────────────────────────────────────────────────
@@ -38,7 +75,6 @@ class UserLoginView(APIView):
 
         user = serializer.validated_data['user']
 
-        # ── Account checks ────────────────────────────────────────────
         if not user.is_active:
             return Response(
                 {'detail': 'Your account has been disabled. Please contact support.'},
@@ -55,7 +91,6 @@ class UserLoginView(APIView):
                 status=status.HTTP_403_FORBIDDEN
             )
 
-        # ── KYC checks for listers ────────────────────────────────────
         if user.role == User.LISTER:
             if user.kyc_status == User.KYC_PENDING:
                 return Response(
@@ -86,7 +121,6 @@ class UserLoginView(APIView):
                     status=status.HTTP_403_FORBIDDEN
                 )
 
-        # ── MFA check ─────────────────────────────────────────────────
         mfa_required = user_requires_mfa(user)
         mfa_enabled = user_has_mfa_enabled(user)
 
@@ -125,12 +159,9 @@ class UserLoginView(APIView):
                 'message': _get_mfa_message(primary_method),
             }, status=status.HTTP_200_OK)
 
-        # ── Set cookies and return user info ──────────────────────────
         tokens = get_tokens_for_user(user)
-
         user.last_login = timezone.now()
         user.save(update_fields=['last_login'])
-
         logger.info(f"Login successful for {user.email}")
 
         response = Response({
@@ -138,37 +169,59 @@ class UserLoginView(APIView):
             'user': UserLoginResponseSerializer(user).data,
         }, status=status.HTTP_200_OK)
 
-        # ✅ Access token cookie (15 min, httpOnly)
-        response.set_cookie(
-            key='access_token',
-            value=tokens['access'],
-            httponly=True,
-            secure=False,       # Set True in production (HTTPS)
-            samesite='Lax',
-            max_age=900,        # 15 minutes
-        )
-
-        # ✅ Refresh token cookie (7 days, httpOnly)
-        response.set_cookie(
-            key='refresh_token',
-            value=tokens['refresh'],
-            httponly=True,
-            secure=False,       # Set True in production (HTTPS)
-            samesite='Lax',
-            max_age=604800,     # 7 days
-        )
-
-        return response
+        return _set_auth_cookies(response, tokens)
 
 
-def _get_mfa_message(mfa_method):
-    if not mfa_method:
-        return 'Please verify with your MFA method.'
-    if mfa_method.method_type == 'totp':
-        return 'Please enter the 6-digit code from your authenticator app.'
-    elif mfa_method.method_type == 'email':
-        return 'A verification code has been sent to your email.'
-    return 'Please verify with your MFA method.'
+# ─── GOOGLE LOGIN ─────────────────────────────────────────────────────────────
+
+class GoogleLoginView(APIView):
+    """Google OAuth Login — sets httpOnly cookies, same as UserLoginView."""
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = GoogleLoginSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        code = serializer.validated_data['code']
+
+        try:
+            token_data = exchange_code_for_token(code)
+            id_token_str = token_data.get('id_token')
+
+            if not id_token_str:
+                return Response(
+                    {'error': 'No ID token from Google'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            google_user_data = verify_google_token(id_token_str)
+            user, created = get_or_create_user_from_google(google_user_data)
+            tokens = get_tokens_for_user(user)
+
+            user.last_login = timezone.now()
+            user.save(update_fields=['last_login'])
+            logger.info(f"Google OAuth: User logged in: {user.email}")
+
+            response = Response({
+                'message': 'Login successful',
+                'user': UserSerializer(user).data,
+            }, status=status.HTTP_200_OK)
+
+            return _set_auth_cookies(response, tokens)
+
+        except Exception as e:
+            logger.error(f"Google OAuth error: {e}")
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+
+class GoogleLoginTokenView(APIView):
+    """Alternative Google endpoint"""
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        return GoogleLoginView.as_view()(request)
 
 
 # ─── LOGOUT ───────────────────────────────────────────────────────────────────
@@ -195,8 +248,8 @@ class UserLogoutView(APIView):
 
 class CookieTokenRefreshView(TokenRefreshView):
     """
-    Reads refresh_token from cookie → returns new access_token as cookie.
-    Frontend doesn't need to handle tokens at all.
+    Reads refresh_token from cookie → issues new access_token as cookie.
+    Frontend never touches tokens directly.
     """
 
     def post(self, request, *args, **kwargs):
@@ -208,15 +261,13 @@ class CookieTokenRefreshView(TokenRefreshView):
                 status=status.HTTP_401_UNAUTHORIZED
             )
 
-        # Inject into request data for simplejwt to process
-        request.data._mutable = True if hasattr(request.data, '_mutable') else None
         try:
-            request.data['refresh'] = refresh_token
-        except AttributeError:
-            # QueryDict is immutable — create mutable copy
-            data = request.data.copy()
+            # JSON requests → request.data is a plain dict, just copy it
+            data = request.data.copy() if isinstance(request.data, dict) else request.data.copy()
             data['refresh'] = refresh_token
-            request._data = data
+            request._full_data = data
+        except Exception:
+            request._full_data = {'refresh': refresh_token}
 
         try:
             response = super().post(request, *args, **kwargs)
@@ -228,19 +279,17 @@ class CookieTokenRefreshView(TokenRefreshView):
 
         if response.status_code == 200:
             new_access = response.data.get('access')
-            new_refresh = response.data.get('refresh')  # rotated refresh token
+            new_refresh = response.data.get('refresh')
 
-            # Set new access cookie
             response.set_cookie(
                 key='access_token',
                 value=new_access,
                 httponly=True,
-                secure=False,
+                secure=False,   # True in production
                 samesite='Lax',
                 max_age=900,
             )
 
-            # Update refresh cookie if rotated
             if new_refresh:
                 response.set_cookie(
                     key='refresh_token',
@@ -251,7 +300,6 @@ class CookieTokenRefreshView(TokenRefreshView):
                     max_age=604800,
                 )
 
-            # Don't expose tokens in response body
             response.data = {'detail': 'Token refreshed successfully'}
 
         return response

@@ -166,14 +166,14 @@ Best regards,
 Accommodation Rentals Security Team
     """
     
-    if settings.DEBUG:
-        print("\n" + "="*70)
-        print("🔐 MFA EMAIL VERIFICATION CODE")
-        print("="*70)
-        print(f"📧 Email: {user.email}")
-        print(f"🔢 Code: {code}")
-        print(f"⏰ Valid for: 10 minutes")
-        print("="*70 + "\n")
+    # if settings.DEBUG:
+    #     print("\n" + "="*70)
+    #     print("🔐 MFA EMAIL VERIFICATION CODE")
+    #     print("="*70)
+    #     print(f"📧 Email: {user.email}")
+    #     print(f"🔢 Code: {code}")
+    #     print(f"⏰ Valid for: 10 minutes")
+    #     print("="*70 + "\n")
     
     try:
         result = send_mail(
@@ -192,10 +192,10 @@ Accommodation Rentals Security Team
         
     except Exception as e:
         logger.error(f"Error sending MFA email to {user.email}: {e}")
-        if settings.DEBUG:
-            print(f"❌ Email sending failed: {str(e)}")
-            print(f"✅ But code is printed above: {code}")
-            print("="*70 + "\n")
+        # if settings.DEBUG:
+        #     print(f"❌ Email sending failed: {str(e)}")
+        #     print(f"✅ But code is printed above: {code}")
+        #     print("="*70 + "\n")
         return False
 
 
