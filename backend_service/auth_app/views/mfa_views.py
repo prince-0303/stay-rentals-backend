@@ -7,6 +7,7 @@ import qrcode
 import io
 import base64
 import logging
+from drf_spectacular.utils import extend_schema, OpenApiResponse
 
 from ..models import MFAMethod, MFABackupCode, MFASession, MFAVerificationCode
 from ..serializers import (
@@ -37,6 +38,12 @@ class MFAStatusView(APIView):
     """Get MFA status for current user"""
     permission_classes = [IsAuthenticated]
     
+    @extend_schema(
+        responses={
+            200: OpenApiResponse(description='MFA status retrieved successfully'),
+        }
+    )
+
     def get(self, request):
         user = request.user
         
@@ -64,6 +71,14 @@ class MFASetupInitView(APIView):
     """Initialize MFA setup"""
     permission_classes = [IsAuthenticated]
     
+    @extend_schema(
+        request=MFASetupInitSerializer,
+        responses={
+            200: OpenApiResponse(description='MFA setup initialized. Returns QR code for TOTP or sends email code.'),
+            400: OpenApiResponse(description='Validation error'),
+        }
+    )
+
     def post(self, request):
         serializer = MFASetupInitSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -116,6 +131,14 @@ class MFAVerifySetupView(APIView):
     """Verify MFA setup with code"""
     permission_classes = [IsAuthenticated]
     
+    @extend_schema(
+        request=MFAVerifySetupSerializer,
+        responses={
+            200: OpenApiResponse(description='MFA setup completed. Returns backup codes.'),
+            400: OpenApiResponse(description='Invalid or expired verification code'),
+        }
+    )
+
     def post(self, request):
         serializer = MFAVerifySetupSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -194,6 +217,14 @@ class MFARegenerateBackupCodesView(APIView):
     """Regenerate backup codes"""
     permission_classes = [IsAuthenticated]
     
+    @extend_schema(
+        request=None,
+        responses={
+            200: OpenApiResponse(description='New backup codes generated'),
+            400: OpenApiResponse(description='MFA is not enabled'),
+        }
+    )
+
     def post(self, request):
         user = request.user
         
@@ -215,6 +246,15 @@ class MFADisableView(APIView):
     """Disable MFA (requires password confirmation)"""
     permission_classes = [IsAuthenticated]
     
+    @extend_schema(
+        request=MFADisableSerializer,
+        responses={
+            200: OpenApiResponse(description='MFA disabled successfully'),
+            400: OpenApiResponse(description='Incorrect password or method not enabled'),
+            403: OpenApiResponse(description='Admins cannot disable MFA'),
+        }
+    )
+
     def post(self, request):
         serializer = MFADisableSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -275,6 +315,15 @@ class MFASendCodeView(APIView):
     """Resend MFA code (Email only)"""
     permission_classes = [AllowAny]
     
+    @extend_schema(
+        request=MFASendCodeSerializer,
+        responses={
+            200: OpenApiResponse(description='Verification code sent to email'),
+            400: OpenApiResponse(description='Invalid or expired MFA session'),
+            429: OpenApiResponse(description='Too many requests - rate limited'),
+        }
+    )
+
     def post(self, request):
         serializer = MFASendCodeSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -325,6 +374,15 @@ class MFASendCodeView(APIView):
 class MFALoginVerifyView(APIView):
     """Verify MFA code during login"""
     permission_classes = [AllowAny]
+    
+    @extend_schema(
+        request=MFALoginVerifySerializer,
+        responses={
+            200: OpenApiResponse(description='MFA verified. Login successful, sets auth cookies.'),
+            400: OpenApiResponse(description='Invalid MFA code or expired session'),
+            429: OpenApiResponse(description='Too many requests - rate limited'),
+        }
+    )
     
     def post(self, request):
         serializer = MFALoginVerifySerializer(data=request.data)

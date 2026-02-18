@@ -4,11 +4,20 @@ from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
 from ..serializers import GoogleLoginSerializer, UserSerializer, get_tokens_for_user
 from ..google_oauth import exchange_code_for_token, verify_google_token, get_or_create_user_from_google
+from drf_spectacular.utils import extend_schema, OpenApiResponse
 
 
 class GoogleLoginView(APIView):
     """Google OAuth Login"""
     permission_classes = [AllowAny]
+
+    @extend_schema(
+        request=GoogleLoginSerializer,
+        responses={
+            200: OpenApiResponse(description='Login successful'),
+            400: OpenApiResponse(description='Invalid Google code or token'),
+        }
+    )
 
     def post(self, request):
         serializer = GoogleLoginSerializer(data=request.data)
@@ -63,5 +72,13 @@ class GoogleLoginTokenView(APIView):
     """Alternative Google endpoint"""
     permission_classes = [AllowAny]
 
+    @extend_schema(
+        request=GoogleLoginSerializer,
+        responses={
+            200: OpenApiResponse(description='Login successful'),
+            400: OpenApiResponse(description='Invalid Google code or token'),
+        }
+    )
+    
     def post(self, request):
         return GoogleLoginView.as_view()(request)

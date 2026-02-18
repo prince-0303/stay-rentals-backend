@@ -27,6 +27,7 @@ INSTALLED_APPS = [
     'corsheaders',
     'cloudinary',
     'auth_app',
+    'drf_spectacular',
 ]
 
 MIDDLEWARE = [
@@ -147,7 +148,8 @@ SIMPLE_JWT = {
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
     'auth_app.authentication.CookieJWTAuthentication',
-]
+],
+'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
 }
 
 

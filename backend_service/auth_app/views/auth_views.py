@@ -6,6 +6,7 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenRefreshView
 from rest_framework_simplejwt.exceptions import TokenError, InvalidToken
+from drf_spectacular.utils import extend_schema, OpenApiResponse
 
 from ..models import User, MFASession
 from ..serializers import (
@@ -64,6 +65,14 @@ def _get_mfa_message(mfa_method):
 class UserLoginView(APIView):
     permission_classes = [AllowAny]
 
+    @extend_schema(
+        request=UserLoginSerializer,
+        responses={
+            200: OpenApiResponse(description='Login successful or MFA required'),
+            401: OpenApiResponse(description='Invalid email or password'),
+            403: OpenApiResponse(description='Account disabled / Email not verified / KYC pending or rejected / MFA not set up'),
+        }
+    )
     def post(self, request):
         serializer = UserLoginSerializer(data=request.data, context={'request': request})
 
@@ -178,6 +187,14 @@ class GoogleLoginView(APIView):
     """Google OAuth Login — sets httpOnly cookies, same as UserLoginView."""
     permission_classes = [AllowAny]
 
+    @extend_schema(
+        request=GoogleLoginSerializer,
+        responses={
+            200: OpenApiResponse(description='Login successful'),
+            400: OpenApiResponse(description='Invalid Google code or token'),
+        }
+    )
+
     def post(self, request):
         serializer = GoogleLoginSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -229,6 +246,13 @@ class GoogleLoginTokenView(APIView):
 class UserLogoutView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        request=None,
+        responses={
+            200: OpenApiResponse(description='Logged out successfully'),
+        }
+    )
+
     def post(self, request):
         try:
             refresh_token = request.COOKIES.get('refresh_token')
@@ -251,6 +275,14 @@ class CookieTokenRefreshView(TokenRefreshView):
     Reads refresh_token from cookie → issues new access_token as cookie.
     Frontend never touches tokens directly.
     """
+
+    @extend_schema(
+        request=None,
+        responses={
+            200: OpenApiResponse(description='Token refreshed successfully'),
+            401: OpenApiResponse(description='Refresh token missing or expired'),
+        }
+    )
 
     def post(self, request, *args, **kwargs):
         refresh_token = request.COOKIES.get('refresh_token')

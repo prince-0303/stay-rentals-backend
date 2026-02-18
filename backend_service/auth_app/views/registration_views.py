@@ -10,6 +10,8 @@ from django.conf import settings
 from ..models import User, OTP
 from ..serializers import RegisterOrVerifySerializer, ResendOTPSerializer
 from ..utils import generate_otp, send_otp_email
+from drf_spectacular.utils import extend_schema, OpenApiResponse, inline_serializer
+
 
 
 class RegisterOrVerifyEmailView(APIView):
@@ -249,6 +251,14 @@ class RegisterOrVerifyEmailView(APIView):
 class ResendOTPView(APIView):
     """Resend verification OTP"""
     permission_classes = [AllowAny]
+    
+    @extend_schema(
+        request=ResendOTPSerializer,
+        responses={
+            200: OpenApiResponse(description='New OTP sent to email'),
+            404: OpenApiResponse(description='No pending registration found for this email'),
+        }
+    )
     
     def post(self, request):
         serializer = ResendOTPSerializer(data=request.data)

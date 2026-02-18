@@ -6,6 +6,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.parsers import MultiPartParser, FormParser
 import cloudinary.uploader
 from cloudinary.exceptions import Error as CloudinaryError
+from drf_spectacular.utils import extend_schema, OpenApiResponse, OpenApiParameter
 
 from ..models import User
 from ..permissions import IsAdmin
@@ -16,6 +17,13 @@ class KYCStatusView(APIView):
     """Get KYC status for current user (lister only)"""
     permission_classes = [IsAuthenticated]
     
+    @extend_schema(
+        responses={
+            200: OpenApiResponse(description='KYC status retrieved successfully'),
+            403: OpenApiResponse(description='Only listers have KYC status'),
+        }
+    )
+
     def get(self, request):
         user = request.user
         
@@ -49,6 +57,26 @@ class KYCResubmissionView(APIView):
     permission_classes = [IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser]
     
+    @extend_schema(
+        request={
+            'multipart/form-data': {
+                'type': 'object',
+                'properties': {
+                    'aadhar_number': {'type': 'string', 'description': '12-digit Aadhar number'},
+                    'aadhar_front': {'type': 'string', 'format': 'binary', 'description': 'Front image of Aadhar (JPG/PNG, max 10MB)'},
+                    'aadhar_back': {'type': 'string', 'format': 'binary', 'description': 'Back image of Aadhar (JPG/PNG, max 10MB)'},
+                },
+                'required': ['aadhar_number', 'aadhar_front', 'aadhar_back']
+            }
+        },
+        responses={
+            200: OpenApiResponse(description='KYC submitted successfully'),
+            400: OpenApiResponse(description='Validation error'),
+            403: OpenApiResponse(description='Only listers can submit KYC'),
+            500: OpenApiResponse(description='Cloudinary upload failed'),
+        }
+    )
+
     def post(self, request):
         user = request.user
         
@@ -197,6 +225,13 @@ class KYCApprovalView(APIView):
     """Admin manually verifies Aadhaar and approves/rejects"""
     permission_classes = [IsAuthenticated, IsAdmin]
     
+    @extend_schema(
+        responses={
+            200: OpenApiResponse(description='KYC details for admin review'),
+            404: OpenApiResponse(description='Lister not found'),
+        }
+    )
+
     def get(self, request, user_id):
         """Get KYC details for admin review"""
         try:
@@ -226,6 +261,24 @@ class KYCApprovalView(APIView):
         
         return Response(data, status=status.HTTP_200_OK)
     
+    @extend_schema(
+        request={
+            'application/json': {
+                'type': 'object',
+                'properties': {
+                    'action': {'type': 'string', 'enum': ['approve', 'reject'], 'description': 'Approve or reject KYC'},
+                    'reason': {'type': 'string', 'description': 'Required if action is reject'},
+                },
+                'required': ['action']
+            }
+        },
+        responses={
+            200: OpenApiResponse(description='KYC approved or rejected'),
+            400: OpenApiResponse(description='Invalid action or missing rejection reason'),
+            404: OpenApiResponse(description='Lister not found'),
+        }
+    )
+
     def post(self, request, user_id):
         """Admin approves/rejects after manual verification"""
         try:
@@ -290,6 +343,13 @@ class KYCPendingListView(APIView):
     """Admin views all pending KYC submissions"""
     permission_classes = [IsAuthenticated, IsAdmin]
     
+    @extend_schema(
+        responses={
+            200: OpenApiResponse(description='List of pending KYC submissions'),
+        }
+    )
+
+
     def get(self, request):
         pending_listers = User.objects.filter(
             role=User.LISTER,
@@ -320,6 +380,20 @@ class KYCPendingListView(APIView):
 class KYCAllListersView(APIView):
     """Admin views all listers with their KYC status"""
     permission_classes = [IsAuthenticated, IsAdmin]
+    
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(
+                name='status',
+                type=str,
+                description='Filter by KYC status (e.g. pending, approved, rejected)',
+                required=False,
+            )
+        ],
+        responses={
+            200: OpenApiResponse(description='List of all listers with KYC status'),
+        }
+    )
     
     def get(self, request):
         # Get filter from query params

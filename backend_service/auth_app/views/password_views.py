@@ -6,6 +6,7 @@ from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
+from drf_spectacular.utils import extend_schema, OpenApiResponse
 import logging
 
 from ..models import User, OTP
@@ -25,6 +26,14 @@ class PasswordResetRequestView(APIView):
     """
     permission_classes = [AllowAny]
     
+    @extend_schema(
+        request=PasswordResetRequestSerializer,
+        responses={
+            200: OpenApiResponse(description='OTP sent to email if account exists'),
+            429: OpenApiResponse(description='Too many requests - rate limited'),
+        }
+    )
+
     def post(self, request):
         serializer = PasswordResetRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -105,6 +114,14 @@ class PasswordResetConfirmView(APIView):
     """
     permission_classes = [AllowAny]
     
+    @extend_schema(
+        request=PasswordResetConfirmSerializer,
+        responses={
+            200: OpenApiResponse(description='Password reset successful'),
+            400: OpenApiResponse(description='Invalid or expired OTP'),
+        }
+    )
+
     def post(self, request):
         serializer = PasswordResetConfirmSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -166,6 +183,14 @@ class ChangePasswordView(APIView):
     Change password (logged in user)
     """
     permission_classes = [IsAuthenticated]
+    
+    @extend_schema(
+        request=ChangePasswordSerializer,
+        responses={
+            200: OpenApiResponse(description='Password changed successfully'),
+            400: OpenApiResponse(description='Validation error (wrong current password, etc.)'),
+        }
+    )
     
     def post(self, request):
         serializer = ChangePasswordSerializer(
