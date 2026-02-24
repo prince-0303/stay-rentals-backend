@@ -1,0 +1,16 @@
+There is no fee collected for scheduling a property visit. Visits are completely free to book.
+
+If a user does not attend a scheduled visit without informing in advance, a warning is issued to their account.
+If a user misses visits more than 3 times, their account will be temporarily restricted for 24 hours to 3 days depending on the frequency of no-shows.
+
+If a user pays an advance to temporarily lock a property and then cancels, 50% of the advance amount will be refunded.
+
+If a property is completely locked and confirmed, the advance payment becomes non-refundable.
+
+If the lister cancels a booking after receiving the advance payment, the user will receive a 100% full refund processed within 3-5 business days.
+
+If a payment is deducted but the booking is not confirmed due to a technical error, the full amount will be refunded within 5-7 business days.
+
+For any refund related queries, please contact our support team.
+
+The refund of advance amount will be processed within 2–3 business days after the user has vacated the property and the property has been inspected, if applicable.

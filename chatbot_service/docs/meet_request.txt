@@ -1,0 +1,11 @@
+A user can send a meet request to schedule a property visit. A user can request a maximum of 3 to 5 meets at a time.
+
+Once a meet request is sent, the lister is notified and must confirm or reject the request within 1 hours. If the lister does not respond within 1 hours, the request expires automatically.
+
+After the lister confirms, the visit is scheduled. The user must attend the visit at the agreed time.
+
+If the user does not attend without prior notice, a warning is added to their account. More than 3 no-shows may result in a temporary account restriction of 24 hours to 3 days.
+
+After visiting the property, the user can choose to proceed by paying the advance or simply decline without any charges.
+
+On the property page, click the Request Meet button. The lister will receive a notification and can accept or decline.
