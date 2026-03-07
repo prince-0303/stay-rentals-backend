@@ -9,6 +9,10 @@ from drf_spectacular.utils import extend_schema, OpenApiParameter
 from drf_spectacular.types import OpenApiTypes
 from .tasks import sync_properties_to_vectorstore
 
+from django.db.models.functions import TruncMonth
+from datetime import timedelta
+from .utils import geocode_address
+
 from .models import Property, PropertyImage, VisitSchedule, Review, UserPreference, SavedProperty
 from .serializers import (
     PropertyListSerializer, PropertyDetailSerializer, PropertyCreateUpdateSerializer, PropertyImageUploadSerializer,
@@ -16,7 +20,7 @@ from .serializers import (
     ReviewSerializer, UserPreferenceSerializer, SavedPropertySerializer,
 )
 from django.conf import settings
-from django.db.models import Avg
+from django.db.models import Avg, Count, Sum
 import requests as http_requests
 
 
@@ -98,6 +102,14 @@ class PropertyCreateView(APIView):
         serializer = PropertyCreateUpdateSerializer(data=request.data)
         if serializer.is_valid():
             property = serializer.save(lister=request.user)
+            lat, lng = geocode_address(
+                property.address_line, property.city,
+                property.state, property.pincode
+            )
+            if lat and lng:
+                property.latitude = lat
+                property.longitude = lng
+                property.save(update_fields=['latitude', 'longitude'])
             sync_properties_to_vectorstore.delay()
             return Response(
                 PropertyDetailSerializer(property).data,
@@ -327,7 +339,16 @@ class UserPreferenceView(APIView):
         pref, _ = UserPreference.objects.get_or_create(user=request.user)
         serializer = UserPreferenceSerializer(pref, data=request.data, partial=True)
         if serializer.is_valid():
-            serializer.save()
+            updated = serializer.save()
+            if any(f in request.data for f in ['address_line', 'city', 'state', 'pincode']):
+                lat, lng = geocode_address(
+                    updated.address_line, updated.city,
+                    updated.state, updated.pincode
+                )
+                if lat and lng:
+                    updated.latitude = lat
+                    updated.longitude = lng
+                    updated.save(update_fields=['latitude', 'longitude'])
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -472,7 +493,8 @@ class RecommendationsView(APIView):
         if pref.max_budget:
             queryset = queryset.filter(rent_price__lte=pref.max_budget)
         if pref.preferred_property_types:
-            queryset = queryset.filter(property_type__in=pref.preferred_property_types)
+            lower_types = [t.lower() for t in pref.preferred_property_types]
+            queryset = queryset.filter(property_type__in=lower_types)
         if pref.preferred_tenants:
             queryset = queryset.filter(preferred_tenants=pref.preferred_tenants)
         if pref.pet_friendly is not None:
@@ -695,8 +717,12 @@ class VisitScheduleManageView(APIView):
     )
     def patch(self, request, pk):
         visit = get_object_or_404(VisitSchedule, pk=pk)
-
-        if not is_lister(request.user) or visit.property.lister != request.user:
+        
+        # Check permissions: Lister can manage entirely, requester can only cancel
+        is_owner = is_lister(request.user) and visit.property.lister == request.user
+        is_requester_cancelling = (visit.user == request.user and request.data.get('status') == VisitSchedule.CANCELLED)
+        
+        if not (is_owner or is_requester_cancelling):
             return Response(
                 {"error": "You do not have permission to manage this visit."},
                 status=status.HTTP_403_FORBIDDEN
@@ -704,8 +730,27 @@ class VisitScheduleManageView(APIView):
 
         serializer = VisitScheduleManageSerializer(visit, data=request.data, partial=True)
         if serializer.is_valid():
+            previous_status = visit.status
+            new_status = serializer.validated_data.get('status', previous_status)
+            
+            # Check if this is the user cancelling a previously un-cancelled request
+            is_user_cancelling = (
+                request.user == visit.user 
+                and new_status == VisitSchedule.CANCELLED 
+                and previous_status != VisitSchedule.CANCELLED
+            )
+            
             serializer.save()
-            return Response(serializer.data)
+            response_data = serializer.data
+            
+            # Apply penalty mapping
+            if is_user_cancelling:
+                request.user.cancellation_count += 1
+                request.user.save(update_fields=['cancellation_count'])
+                if request.user.cancellation_count >= 5:
+                    response_data['warning'] = f"Warning: You have cancelled {request.user.cancellation_count} visit requests. Excessive cancellations may affect your account standing."
+            
+            return Response(response_data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
 class AdminVisitScheduleListView(APIView):
@@ -743,4 +788,44 @@ class AdminVisitScheduleListView(APIView):
         return Response({
             'count': visits.count(),
             'visits': serializer.data
+        })
+    
+
+
+class ListerDashboardAnalyticsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if not is_lister(request.user):
+            return Response({"error": "Forbidden"}, status=403)
+
+        user = request.user
+        
+        # 1. Basic Counts
+        my_properties = Property.objects.filter(lister=user)
+        total_listings = my_properties.count()
+        
+        # 2. Leads (Visit Schedules)
+        leads = VisitSchedule.objects.filter(property__lister=user)
+        total_leads = leads.count()
+        pending_leads = leads.filter(status='pending').count()
+
+        # 3. Growth Analysis (Leads per month for the last 6 months)
+        six_months_ago = timezone.now() - timedelta(days=180)
+        growth_data = (
+            leads.filter(created_at__gte=six_months_ago)
+            .annotate(month=TruncMonth('created_at'))
+            .values('month')
+            .annotate(count=Count('id'))
+            .order_by('month')
+        )
+
+        return Response({
+            "summary": {
+                "total_listings": total_listings,
+                "total_leads": total_leads,
+                "pending_leads": pending_leads,
+            },
+            "growth": list(growth_data),
+            "recent_leads": VisitScheduleSerializer(leads.order_by('-created_at')[:5], many=True).data
         })
