@@ -1,16 +1,18 @@
-"""
-ASGI config for backend_service project.
-
-It exposes the ASGI callable as a module-level variable named ``application``.
-
-For more information on this file, see
-https://docs.djangoproject.com/en/6.0/howto/deployment/asgi/
-"""
-
+# backend_service/asgi.py
 import os
-
 from django.core.asgi import get_asgi_application
+from channels.routing import ProtocolTypeRouter, URLRouter
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'backend_service.settings')
 
-application = get_asgi_application()
+django_asgi_app = get_asgi_application()
+
+from chat_app.routing import websocket_urlpatterns
+from chat_app.middleware import JWTAuthMiddleware
+
+application = ProtocolTypeRouter({
+    'http': django_asgi_app,
+    'websocket': JWTAuthMiddleware(
+        URLRouter(websocket_urlpatterns)
+    ),
+})
