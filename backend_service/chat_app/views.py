@@ -46,17 +46,29 @@ class MessageListView(APIView):
     @extend_schema(responses=MessageSerializer(many=True))
     def get(self, request, conversation_id):
         conversation = get_object_or_404(Conversation, pk=conversation_id)
-
         if request.user not in [conversation.user, conversation.lister]:
             return Response({"error": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
-
-        # Mark messages as read
         conversation.messages.filter(is_read=False).exclude(sender=request.user).update(is_read=True)
-
         messages = conversation.messages.all()
         serializer = MessageSerializer(messages, many=True)
         return Response(serializer.data)
 
+    def post(self, request, conversation_id):
+        conversation = get_object_or_404(Conversation, pk=conversation_id)
+        if request.user not in [conversation.user, conversation.lister]:
+            return Response({"error": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+        content = request.data.get('content', '').strip()
+        if not content:
+            return Response({"error": "Message content is required."}, status=status.HTTP_400_BAD_REQUEST)
+        message = Message.objects.create(
+            conversation=conversation,
+            sender=request.user,
+            content=content,
+        )
+        conversation.updated_at = message.created_at
+        conversation.save(update_fields=['updated_at'])
+        serializer = MessageSerializer(message)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 class ChatTokenView(APIView):
     permission_classes = [IsAuthenticated]

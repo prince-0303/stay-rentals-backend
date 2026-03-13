@@ -1,4 +1,5 @@
 import json
+import asyncio
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
 from .models import Conversation, Message
@@ -40,21 +41,51 @@ class ChatConsumer(AsyncWebsocketConsumer):
             return
 
         message = await self.save_message(content)
-        print(f"[WS Receive] Message saved ID: {message.id}. Broadcasting to group.")
 
+        # 1. Broadcast message to chat room
         await self.channel_layer.group_send(
             self.room_group_name,
             {
                 'type': 'chat_message',
                 'message_id': message.id,
-                'content': content,  # send plain text to recipient
+                'content': content,
                 'sender_id': self.user.id,
                 'sender_name': self.user.get_full_name(),
                 'created_at': message.created_at.isoformat(),
             }
         )
 
+        # 2. Send real-time unread count update via notification WebSocket
+        recipient_id = await self.get_recipient_id()
+        if recipient_id:
+            unread_count = await self.get_unread_count(recipient_id)
+            await self.channel_layer.group_send(
+                f'notifications_{recipient_id}',
+                {
+                    'type': 'send_notification',
+                    'data': {
+                        'type': 'unread_count',
+                        'conversation_id': self.conversation_id,
+                        'unread_count': unread_count,
+                    }
+                }
+            )
+
+            # 3. Send FCM push notification via Celery
+            from notifications_app.tasks import send_notification_task
+            sender_name = self.user.get_full_name() or self.user.email
+            send_notification_task.delay(
+                recipient_id,
+                'New Message',
+                f'{sender_name} sent you a message',
+                {'type': 'message', 'conversation_id': str(self.conversation_id)}
+            )
+            print(f"[WS Receive] Notification dispatched to user {recipient_id}")
+
+        print(f"[WS Receive] Message saved ID: {message.id}. Broadcast done.")
+
     async def chat_message(self, event):
+        # Don't echo back to the sender
         if event['sender_id'] == self.user.id:
             return
         await self.send(text_data=json.dumps({
@@ -84,42 +115,6 @@ class ChatConsumer(AsyncWebsocketConsumer):
         )
         return message
 
-    async def receive(self, text_data):
-        data = json.loads(text_data)
-        content = data.get('content', '').strip()
-        if not content:
-            return
-        message = await self.save_message(content)
-        
-        # Broadcast message to chat room
-        await self.channel_layer.group_send(
-            self.room_group_name,
-            {
-                'type': 'chat_message',
-                'message_id': message.id,
-                'content': content,
-                'sender_id': self.user.id,
-                'sender_name': self.user.get_full_name(),
-                'created_at': message.created_at.isoformat(),
-            }
-        )
-        
-        # Notify recipient's notification channel
-        recipient_id = await self.get_recipient_id()
-        if recipient_id:
-            unread_count = await self.get_unread_count(recipient_id)
-            await self.channel_layer.group_send(
-                f'notifications_{recipient_id}',
-                {
-                    'type': 'send_notification',
-                    'data': {
-                        'type': 'unread_count',
-                        'conversation_id': self.conversation_id,
-                        'unread_count': unread_count,
-                    }
-                }
-            )
-
     @database_sync_to_async
     def get_recipient_id(self):
         try:
@@ -132,13 +127,14 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
     @database_sync_to_async
     def get_unread_count(self, user_id):
-        from .models import Message
         return Message.objects.filter(
             conversation__id=self.conversation_id,
             is_read=False
         ).exclude(sender__id=user_id).count()
-    
+
+
 class NotificationConsumer(AsyncWebsocketConsumer):
+
     async def connect(self):
         self.user = self.scope['user']
         if not self.user or not self.user.is_authenticated:
@@ -147,9 +143,25 @@ class NotificationConsumer(AsyncWebsocketConsumer):
         self.group_name = f'notifications_{self.user.id}'
         await self.channel_layer.group_add(self.group_name, self.channel_name)
         await self.accept()
+        # Heartbeat to keep connection alive through nginx proxy
+        self._heartbeat_task = asyncio.ensure_future(self._heartbeat())
 
     async def disconnect(self, close_code):
-        await self.channel_layer.group_discard(self.group_name, self.channel_name)
+        if hasattr(self, '_heartbeat_task'):
+            self._heartbeat_task.cancel()
+        if hasattr(self, 'group_name'):
+            await self.channel_layer.group_discard(self.group_name, self.channel_name)
+
+    async def _heartbeat(self):
+        """Ping every 30s to prevent proxy timeouts"""
+        try:
+            while True:
+                await asyncio.sleep(30)
+                await self.send(text_data=json.dumps({'type': 'ping'}))
+        except asyncio.CancelledError:
+            pass
+        except Exception:
+            pass
 
     async def send_notification(self, event):
         await self.send(text_data=json.dumps(event['data']))
