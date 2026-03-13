@@ -22,7 +22,7 @@ from .serializers import (
 from django.conf import settings
 from django.db.models import Avg, Count, Sum
 import requests as http_requests
-
+from notifications_app.tasks import send_notification_task
 
 # ─── Permissions Helpers ───────────────────────────────────────────────────────
 
@@ -58,7 +58,7 @@ class PropertyListView(APIView):
         responses=PropertyListSerializer(many=True)
     )
     def get(self, request):
-        queryset = Property.objects.filter(is_active=True, is_blocked=False)
+        queryset = Property.objects.filter(is_active=True)
 
         city = request.query_params.get('city')
         property_type = request.query_params.get('property_type')
@@ -126,7 +126,7 @@ class PropertyDetailView(APIView):
         responses=PropertyDetailSerializer
     )
     def get(self, request, pk):
-        property = get_object_or_404(Property, pk=pk, is_blocked=False)
+        property = get_object_or_404(Property, pk=pk)
         serializer = PropertyDetailSerializer(property)
         return Response(serializer.data)
 
@@ -236,7 +236,6 @@ class PropertyNearbySearchView(APIView):
         # Get all active properties that have coordinates
         queryset = Property.objects.filter(
             is_active=True,
-            is_blocked=False,
             latitude__isnull=False,
             longitude__isnull=False
         )
@@ -305,7 +304,7 @@ class PropertyReviewView(APIView):
     
     @extend_schema(request=ReviewSerializer, responses=ReviewSerializer)
     def post(self, request, pk):
-        property = get_object_or_404(Property, pk=pk, is_active=True, is_blocked=False)
+        property = get_object_or_404(Property, pk=pk, is_active=True)
 
         if Review.objects.filter(property=property, user=request.user).exists():
             return Response(
@@ -363,7 +362,7 @@ class SavedPropertyView(APIView):
     
     @extend_schema(responses=SavedPropertySerializer)
     def post(self, request, pk):
-        property = get_object_or_404(Property, pk=pk, is_active=True, is_blocked=False)
+        property = get_object_or_404(Property, pk=pk, is_active=True)
 
         if SavedProperty.objects.filter(user=request.user, property=property).exists():
             return Response({"error": "Already saved."}, status=status.HTTP_400_BAD_REQUEST)
@@ -408,7 +407,6 @@ class AIPropertySearchView(APIView):
         properties = Property.objects.filter(
             id__in=property_ids,
             is_active=True,
-            is_blocked=False
         )
 
         # Sort by ChromaDB relevance order
@@ -437,7 +435,7 @@ class AIPropertyCompareView(APIView):
         if len(property_ids) < 2:
             return Response({"error": "Provide at least 2 property IDs."}, status=status.HTTP_400_BAD_REQUEST)
 
-        properties = Property.objects.filter(id__in=property_ids, is_active=True, is_blocked=False).annotate(
+        properties = Property.objects.filter(id__in=property_ids, is_active=True).annotate(
             avg_rating=Avg('reviews__overall_rating'),
             avg_cleanliness=Avg('reviews__cleanliness'),
         )
@@ -482,7 +480,7 @@ class RecommendationsView(APIView):
         except Exception:
             return Response({"error": "Set your preferences first."}, status=status.HTTP_400_BAD_REQUEST)
 
-        queryset = Property.objects.filter(is_active=True, is_blocked=False).annotate(
+        queryset = Property.objects.filter(is_active=True).annotate(
             avg_rating=Avg('reviews__overall_rating'),
         )
 
@@ -680,11 +678,31 @@ class VisitScheduleCreateView(APIView):
         responses=VisitScheduleSerializer
     )
     def post(self, request, pk):
-        property = get_object_or_404(Property, pk=pk, is_active=True, is_blocked=False)
+        property = get_object_or_404(Property, pk=pk, is_active=True)
+
+        # Enforce that a user cannot have multiple active schedules for the same property
+        existing_schedule = VisitSchedule.objects.filter(
+            user=request.user, 
+            property=property,
+            status__in=[VisitSchedule.PENDING, VisitSchedule.CONFIRMED]
+        ).exists()
+
+        if existing_schedule:
+            return Response(
+                {"error": "You already have a pending or confirmed visit scheduled for this property."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
         serializer = VisitScheduleSerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
             serializer.save(user=request.user, property=property)
+            visit = serializer.instance
+            send_notification_task.delay(
+                property.lister.id,
+                'New Visit Request',
+                f'{request.user.get_full_name() or request.user.email} wants to visit {property.title}',
+                {'type': 'visit_request', 'property_id': str(property.id)}
+            )            
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -702,6 +720,11 @@ class VisitScheduleListView(APIView):
             visits = VisitSchedule.objects.filter(property__lister=user)
         else:
             visits = VisitSchedule.objects.filter(user=user)
+
+        # Filter by property_id if provided
+        property_id = request.query_params.get('property_id')
+        if property_id:
+            visits = visits.filter(property_id=property_id)
 
         serializer = VisitScheduleSerializer(visits, many=True)
         return Response(serializer.data)
@@ -741,6 +764,14 @@ class VisitScheduleManageView(APIView):
             )
             
             serializer.save()
+            if new_status in ['confirmed', 'cancelled']:
+                status_text = 'approved' if new_status == 'confirmed' else 'rejected'
+                send_notification_task.delay(
+                    visit.user.id,
+                    f'Visit {status_text.capitalize()}',
+                    f'Your visit to {visit.property.title} has been {status_text}',
+                    {'type': 'visit_update', 'property_id': str(visit.property.id)}
+                )
             response_data = serializer.data
             
             # Apply penalty mapping

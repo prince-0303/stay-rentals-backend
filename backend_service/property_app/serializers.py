@@ -38,7 +38,7 @@ class PropertyListSerializer(serializers.ModelSerializer):
         model = Property
         fields = [
             'id', 'title', 'property_type', 'room_type',
-            'city', 'state', 'rent_price', 'availability_status',
+            'city', 'state', 'latitude', 'longitude', 'rent_price', 'availability_status',
             'preferred_tenants', 'pet_friendly', 'furnishing_status',
             'is_active', 'primary_image', 'lister_name', 'created_at'
         ]
@@ -55,16 +55,16 @@ class PropertyDetailSerializer(serializers.ModelSerializer):
     images = PropertyImageSerializer(many=True, read_only=True)
     lister_name = serializers.SerializerMethodField()
     lister_id = serializers.SerializerMethodField()
+    lister_is_online = serializers.SerializerMethodField()
 
     class Meta:
         model = Property
         fields = [
-            'id', 'lister_id', 'lister_name',
+            'id', 'lister_id', 'lister_name', 'lister_is_online',
             'title', 'description', 'property_type',
             'address_line', 'city', 'state', 'pincode',
             'latitude', 'longitude', 'nearest_landmarks',
-            'rent_price',
-            'total_rooms', 'bathrooms', 'kitchens',
+            'rent_price', 'total_rooms', 'bathrooms', 'kitchens',
             'room_type', 'furnishing_status',
             'floor_number', 'total_floors',
             'preferred_tenants', 'pet_friendly',
@@ -80,8 +80,15 @@ class PropertyDetailSerializer(serializers.ModelSerializer):
     def get_lister_id(self, obj):
         return obj.lister.id
 
+    def get_lister_is_online(self, obj):
+        if not obj.lister.last_login:
+            return False
+        from django.utils import timezone
+        diff = timezone.now() - obj.lister.last_login
+        return diff.total_seconds() < 300
 
 class PropertyCreateUpdateSerializer(serializers.ModelSerializer):
+    description = serializers.CharField(required=False, allow_blank=True, default='')
     class Meta:
         model = Property
         fields = [
@@ -119,7 +126,7 @@ class VisitScheduleSerializer(serializers.ModelSerializer):
             'user_name', 'requested_date', 'status',
             'user_note', 'lister_note', 'created_at'
         ]
-        read_only_fields = ['status', 'lister_note']
+        read_only_fields = ['status', 'lister_note', 'property']
 
     def get_property_title(self, obj):
         return obj.property.title
