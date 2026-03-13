@@ -51,7 +51,6 @@ class User(AbstractBaseUser, PermissionsMixin):
     last_name = models.CharField(max_length=150)
     phone_regex = RegexValidator(r'^\+?1?\d{9,15}$', "Invalid phone format")
     phone_number = models.CharField(max_length=17, validators=[phone_regex], blank=True, null=True)
-    profile_picture = models.ImageField(upload_to="profile_pictures/", blank=True, null=True)
 
     # Role
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default=USER)
@@ -71,9 +70,10 @@ class User(AbstractBaseUser, PermissionsMixin):
     email_verification_token = models.CharField(max_length=100, blank=True, null=True)
     email_verification_sent_at = models.DateTimeField(blank=True, null=True)
 
-    # Permissions
+    # Permissions & Activity
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
+    cancellation_count = models.PositiveIntegerField(default=0)
 
     # Timestamps
     date_joined = models.DateTimeField(default=timezone.now)

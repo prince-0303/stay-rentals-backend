@@ -102,46 +102,56 @@ class UserLoginView(APIView):
 
         if user.role == User.LISTER:
             if user.kyc_status == User.KYC_PENDING:
+                # Already submitted — cannot do anything; no auth cookie needed
                 return Response(
                     {
-                        'detail': 'Your KYC verification is pending.',
+                        'detail': 'Your KYC verification is pending review by our admin team.',
                         'kyc_status': user.kyc_status,
                         'requires_kyc': True,
+                        'user': UserLoginResponseSerializer(user).data,
                     },
                     status=status.HTTP_403_FORBIDDEN
                 )
             elif user.kyc_status == User.KYC_REJECTED:
-                return Response(
+                # Rejected — lister must resubmit. Issue tokens so they can call /kyc/submit/
+                tokens = get_tokens_for_user(user)
+                response = Response(
                     {
                         'detail': f'Your KYC was rejected. Reason: {user.kyc_rejection_reason or "Not specified"}',
                         'kyc_status': user.kyc_status,
                         'rejection_reason': user.kyc_rejection_reason,
                         'requires_kyc': True,
+                        'user': UserLoginResponseSerializer(user).data,
                     },
                     status=status.HTTP_403_FORBIDDEN
                 )
+                return _set_auth_cookies(response, tokens)
             elif user.kyc_status != User.KYC_APPROVED:
-                return Response(
+                # Not submitted yet — must submit. Issue tokens so they can call /kyc/submit/
+                tokens = get_tokens_for_user(user)
+                response = Response(
                     {
                         'detail': 'Please submit your KYC documents to access your account.',
                         'kyc_status': user.kyc_status,
                         'requires_kyc': True,
+                        'user': UserLoginResponseSerializer(user).data,
                     },
                     status=status.HTTP_403_FORBIDDEN
                 )
+                return _set_auth_cookies(response, tokens)
 
         mfa_required = user_requires_mfa(user)
         mfa_enabled = user_has_mfa_enabled(user)
 
-        if mfa_required and not mfa_enabled:
-            return Response(
-                {
-                    'detail': 'MFA is mandatory for admin accounts.',
-                    'requires_mfa_setup': True,
-                    'mfa_enforced': True,
-                },
-                status=status.HTTP_403_FORBIDDEN
-            )
+        # if mfa_required and not mfa_enabled:
+        #     return Response(
+        #         {
+        #             'detail': 'MFA is mandatory for admin accounts.',
+        #             'requires_mfa_setup': True,
+        #             'mfa_enforced': True,
+        #         },
+        #         status=status.HTTP_403_FORBIDDEN
+        #     )
 
         if mfa_enabled:
             ip_address = get_client_ip(request)
@@ -271,19 +281,6 @@ class UserLogoutView(APIView):
 # ─── TOKEN REFRESH ────────────────────────────────────────────────────────────
 
 class CookieTokenRefreshView(TokenRefreshView):
-    """
-    Reads refresh_token from cookie → issues new access_token as cookie.
-    Frontend never touches tokens directly.
-    """
-
-    @extend_schema(
-        request=None,
-        responses={
-            200: OpenApiResponse(description='Token refreshed successfully'),
-            401: OpenApiResponse(description='Refresh token missing or expired'),
-        }
-    )
-
     def post(self, request, *args, **kwargs):
         refresh_token = request.COOKIES.get('refresh_token')
 
@@ -293,13 +290,7 @@ class CookieTokenRefreshView(TokenRefreshView):
                 status=status.HTTP_401_UNAUTHORIZED
             )
 
-        try:
-            # JSON requests → request.data is a plain dict, just copy it
-            data = request.data.copy() if isinstance(request.data, dict) else request.data.copy()
-            data['refresh'] = refresh_token
-            request._full_data = data
-        except Exception:
-            request._full_data = {'refresh': refresh_token}
+        request.data['refresh'] = refresh_token
 
         try:
             response = super().post(request, *args, **kwargs)
@@ -312,26 +303,36 @@ class CookieTokenRefreshView(TokenRefreshView):
         if response.status_code == 200:
             new_access = response.data.get('access')
             new_refresh = response.data.get('refresh')
-
-            response.set_cookie(
-                key='access_token',
-                value=new_access,
-                httponly=True,
-                secure=False,   # True in production
-                samesite='Lax',
-                max_age=900,
-            )
-
+            response.set_cookie('access_token', new_access, httponly=True, secure=False, samesite='Lax', max_age=3600)
             if new_refresh:
-                response.set_cookie(
-                    key='refresh_token',
-                    value=new_refresh,
-                    httponly=True,
-                    secure=False,
-                    samesite='Lax',
-                    max_age=604800,
-                )
-
+                response.set_cookie('refresh_token', new_refresh, httponly=True, secure=False, samesite='Lax', max_age=604800)
             response.data = {'detail': 'Token refreshed successfully'}
 
+        return response
+
+
+# ─── ACCOUNT MANAGEMENT ───────────────────────────────────────────────────────
+
+class DeactivateAccountView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+        user.is_active = False
+        user.save(update_fields=['is_active'])
+        response = Response({'detail': 'Account deactivated.'}, status=status.HTTP_200_OK)
+        response.delete_cookie('access_token')
+        response.delete_cookie('refresh_token')
+        return response
+
+
+class DeleteAccountView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request):
+        user = request.user
+        user.delete()
+        response = Response({'detail': 'Account deleted.'}, status=status.HTTP_200_OK)
+        response.delete_cookie('access_token')
+        response.delete_cookie('refresh_token')
         return response

@@ -322,3 +322,309 @@ def cleanup_expired_tokens_task():
     result = cleanup_expired_mfa_sessions()
     logger.info(f"Cleanup complete: {result}")
     return result
+
+@shared_task(bind=True, max_retries=3, default_retry_delay=60)
+def send_welcome_email_task(self, email, first_name):
+    subject = 'Welcome to Ez-Stay!'
+    plain = f"Hi {first_name}, welcome to Ez-Stay! Start exploring properties today."
+    html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head><meta charset="UTF-8"></head>
+    <body style="margin:0;padding:0;background-color:#f4f6f9;font-family:'Segoe UI',Arial,sans-serif;">
+      <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f6f9;padding:40px 0;">
+        <tr><td align="center">
+          <table width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+            <tr>
+              <td style="background:linear-gradient(135deg,#2563eb,#1d4ed8);padding:36px 40px;text-align:center;">
+                <h1 style="color:#ffffff;margin:0;font-size:24px;font-weight:700;">Ez-Stay</h1>
+                <p style="color:#bfdbfe;margin:8px 0 0;font-size:14px;">Welcome Aboard!</p>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:40px 40px 32px;">
+                <h2 style="color:#1e293b;font-size:22px;margin:0 0 12px;">Hi {first_name}, welcome to Ez-Stay! 🎉</h2>
+                <p style="color:#64748b;font-size:15px;line-height:1.6;margin:0 0 20px;">
+                  Your account is ready. Start exploring verified rental properties, schedule visits, and find your perfect stay.
+                </p>
+                <div style="background:#f0f7ff;border-left:4px solid #2563eb;padding:16px 20px;border-radius:6px;margin-bottom:24px;">
+                  <p style="color:#1d4ed8;font-size:14px;margin:0;font-weight:600;">✓ Browse thousands of properties</p>
+                  <p style="color:#1d4ed8;font-size:14px;margin:4px 0 0;font-weight:600;">✓ Schedule property visits</p>
+                  <p style="color:#1d4ed8;font-size:14px;margin:4px 0 0;font-weight:600;">✓ Secure advance payments</p>
+                </div>
+                <p style="color:#94a3b8;font-size:13px;margin:0;">Happy house hunting!</p>
+              </td>
+            </tr>
+            <tr>
+              <td style="background:#f8fafc;padding:20px 40px;border-top:1px solid #e2e8f0;text-align:center;">
+                <p style="color:#94a3b8;font-size:12px;margin:0;">© 2025 Ez-Stay. All rights reserved.</p>
+              </td>
+            </tr>
+          </table>
+        </td></tr>
+      </table>
+    </body>
+    </html>
+    """
+    try:
+        _send_html_email(subject, email, html, plain)
+    except Exception as exc:
+        raise self.retry(exc=exc)
+
+
+@shared_task(bind=True, max_retries=3, default_retry_delay=60)
+def send_booking_confirmed_email_task(self, email, first_name, property_title, amount, payment_id):
+    subject = f'Booking Confirmed – {property_title}'
+    plain = f"Hi {first_name}, your advance payment of ₹{amount} for {property_title} is confirmed. Payment ID: {payment_id}"
+    html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head><meta charset="UTF-8"></head>
+    <body style="margin:0;padding:0;background-color:#f4f6f9;font-family:'Segoe UI',Arial,sans-serif;">
+      <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f6f9;padding:40px 0;">
+        <tr><td align="center">
+          <table width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+            <tr>
+              <td style="background:linear-gradient(135deg,#16a34a,#15803d);padding:36px 40px;text-align:center;">
+                <h1 style="color:#ffffff;margin:0;font-size:24px;font-weight:700;">Ez-Stay</h1>
+                <p style="color:#bbf7d0;margin:8px 0 0;font-size:14px;">Booking Confirmed</p>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:40px 40px 32px;">
+                <div style="text-align:center;margin-bottom:24px;">
+                  <span style="font-size:48px;">🏠</span>
+                  <h2 style="color:#1e293b;font-size:22px;margin:12px 0 0;">Booking Confirmed!</h2>
+                </div>
+                <p style="color:#64748b;font-size:15px;line-height:1.6;margin:0 0 20px;">
+                  Hi <strong>{first_name}</strong>, your advance payment for <strong>{property_title}</strong> has been received and confirmed.
+                </p>
+                <div style="background:#f0fdf4;border-left:4px solid #16a34a;padding:16px 20px;border-radius:6px;margin-bottom:24px;">
+                  <p style="color:#15803d;font-size:14px;margin:0;font-weight:600;">Property: {property_title}</p>
+                  <p style="color:#15803d;font-size:14px;margin:4px 0 0;font-weight:600;">Amount Paid: ₹{amount}</p>
+                  <p style="color:#15803d;font-size:14px;margin:4px 0 0;font-weight:600;">Payment ID: {payment_id}</p>
+                </div>
+                <p style="color:#94a3b8;font-size:13px;margin:0;">The lister will contact you shortly to arrange move-in details.</p>
+              </td>
+            </tr>
+            <tr>
+              <td style="background:#f8fafc;padding:20px 40px;border-top:1px solid #e2e8f0;text-align:center;">
+                <p style="color:#94a3b8;font-size:12px;margin:0;">© 2025 Ez-Stay. All rights reserved.</p>
+              </td>
+            </tr>
+          </table>
+        </td></tr>
+      </table>
+    </body>
+    </html>
+    """
+    try:
+        _send_html_email(subject, email, html, plain)
+    except Exception as exc:
+        raise self.retry(exc=exc)
+
+
+@shared_task(bind=True, max_retries=3, default_retry_delay=60)
+def send_booking_received_email_task(self, email, lister_name, tenant_name, property_title, amount, payment_id):
+    subject = f'Advance Payment Received – {property_title}'
+    plain = f"Hi {lister_name}, {tenant_name} has paid ₹{amount} advance for {property_title}. Payment ID: {payment_id}"
+    html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head><meta charset="UTF-8"></head>
+    <body style="margin:0;padding:0;background-color:#f4f6f9;font-family:'Segoe UI',Arial,sans-serif;">
+      <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f6f9;padding:40px 0;">
+        <tr><td align="center">
+          <table width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+            <tr>
+              <td style="background:linear-gradient(135deg,#2563eb,#1d4ed8);padding:36px 40px;text-align:center;">
+                <h1 style="color:#ffffff;margin:0;font-size:24px;font-weight:700;">Ez-Stay</h1>
+                <p style="color:#bfdbfe;margin:8px 0 0;font-size:14px;">Payment Received</p>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:40px 40px 32px;">
+                <div style="text-align:center;margin-bottom:24px;">
+                  <span style="font-size:48px;">💰</span>
+                  <h2 style="color:#1e293b;font-size:22px;margin:12px 0 0;">Advance Payment Received!</h2>
+                </div>
+                <p style="color:#64748b;font-size:15px;line-height:1.6;margin:0 0 20px;">
+                  Hi <strong>{lister_name}</strong>, <strong>{tenant_name}</strong> has paid the advance for your property.
+                </p>
+                <div style="background:#f0f7ff;border-left:4px solid #2563eb;padding:16px 20px;border-radius:6px;margin-bottom:24px;">
+                  <p style="color:#1d4ed8;font-size:14px;margin:0;font-weight:600;">Property: {property_title}</p>
+                  <p style="color:#1d4ed8;font-size:14px;margin:4px 0 0;font-weight:600;">Tenant: {tenant_name}</p>
+                  <p style="color:#1d4ed8;font-size:14px;margin:4px 0 0;font-weight:600;">Amount: ₹{amount}</p>
+                  <p style="color:#1d4ed8;font-size:14px;margin:4px 0 0;font-weight:600;">Payment ID: {payment_id}</p>
+                </div>
+                <p style="color:#94a3b8;font-size:13px;margin:0;">Please contact the tenant to arrange move-in details.</p>
+              </td>
+            </tr>
+            <tr>
+              <td style="background:#f8fafc;padding:20px 40px;border-top:1px solid #e2e8f0;text-align:center;">
+                <p style="color:#94a3b8;font-size:12px;margin:0;">© 2025 Ez-Stay. All rights reserved.</p>
+              </td>
+            </tr>
+          </table>
+        </td></tr>
+      </table>
+    </body>
+    </html>
+    """
+    try:
+        _send_html_email(subject, email, html, plain)
+    except Exception as exc:
+        raise self.retry(exc=exc)
+
+@shared_task(bind=True, max_retries=3, default_retry_delay=60)
+def send_welcome_email_task(self, email, first_name):
+    subject = 'Welcome to Ez-Stay!'
+    plain = f"Hi {first_name}, welcome to Ez-Stay! Start exploring properties today."
+    html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head><meta charset="UTF-8"></head>
+    <body style="margin:0;padding:0;background-color:#f4f6f9;font-family:'Segoe UI',Arial,sans-serif;">
+      <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f6f9;padding:40px 0;">
+        <tr><td align="center">
+          <table width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+            <tr>
+              <td style="background:linear-gradient(135deg,#2563eb,#1d4ed8);padding:36px 40px;text-align:center;">
+                <h1 style="color:#ffffff;margin:0;font-size:24px;font-weight:700;">Ez-Stay</h1>
+                <p style="color:#bfdbfe;margin:8px 0 0;font-size:14px;">Welcome Aboard!</p>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:40px 40px 32px;">
+                <h2 style="color:#1e293b;font-size:22px;margin:0 0 12px;">Hi {first_name}, welcome to Ez-Stay! 🎉</h2>
+                <p style="color:#64748b;font-size:15px;line-height:1.6;margin:0 0 20px;">
+                  Your account is ready. Start exploring verified rental properties, schedule visits, and find your perfect stay.
+                </p>
+                <div style="background:#f0f7ff;border-left:4px solid #2563eb;padding:16px 20px;border-radius:6px;margin-bottom:24px;">
+                  <p style="color:#1d4ed8;font-size:14px;margin:0;font-weight:600;">✓ Browse thousands of properties</p>
+                  <p style="color:#1d4ed8;font-size:14px;margin:4px 0 0;font-weight:600;">✓ Schedule property visits</p>
+                  <p style="color:#1d4ed8;font-size:14px;margin:4px 0 0;font-weight:600;">✓ Secure advance payments</p>
+                </div>
+                <p style="color:#94a3b8;font-size:13px;margin:0;">Happy house hunting!</p>
+              </td>
+            </tr>
+            <tr>
+              <td style="background:#f8fafc;padding:20px 40px;border-top:1px solid #e2e8f0;text-align:center;">
+                <p style="color:#94a3b8;font-size:12px;margin:0;">© 2025 Ez-Stay. All rights reserved.</p>
+              </td>
+            </tr>
+          </table>
+        </td></tr>
+      </table>
+    </body>
+    </html>
+    """
+    try:
+        _send_html_email(subject, email, html, plain)
+    except Exception as exc:
+        raise self.retry(exc=exc)
+
+
+@shared_task(bind=True, max_retries=3, default_retry_delay=60)
+def send_booking_confirmed_email_task(self, email, first_name, property_title, amount, payment_id):
+    subject = f'Booking Confirmed – {property_title}'
+    plain = f"Hi {first_name}, your advance payment of ₹{amount} for {property_title} is confirmed. Payment ID: {payment_id}"
+    html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head><meta charset="UTF-8"></head>
+    <body style="margin:0;padding:0;background-color:#f4f6f9;font-family:'Segoe UI',Arial,sans-serif;">
+      <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f6f9;padding:40px 0;">
+        <tr><td align="center">
+          <table width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+            <tr>
+              <td style="background:linear-gradient(135deg,#16a34a,#15803d);padding:36px 40px;text-align:center;">
+                <h1 style="color:#ffffff;margin:0;font-size:24px;font-weight:700;">Ez-Stay</h1>
+                <p style="color:#bbf7d0;margin:8px 0 0;font-size:14px;">Booking Confirmed</p>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:40px 40px 32px;">
+                <div style="text-align:center;margin-bottom:24px;">
+                  <span style="font-size:48px;">🏠</span>
+                  <h2 style="color:#1e293b;font-size:22px;margin:12px 0 0;">Booking Confirmed!</h2>
+                </div>
+                <p style="color:#64748b;font-size:15px;line-height:1.6;margin:0 0 20px;">
+                  Hi <strong>{first_name}</strong>, your advance payment for <strong>{property_title}</strong> has been received and confirmed.
+                </p>
+                <div style="background:#f0fdf4;border-left:4px solid #16a34a;padding:16px 20px;border-radius:6px;margin-bottom:24px;">
+                  <p style="color:#15803d;font-size:14px;margin:0;font-weight:600;">Property: {property_title}</p>
+                  <p style="color:#15803d;font-size:14px;margin:4px 0 0;font-weight:600;">Amount Paid: ₹{amount}</p>
+                  <p style="color:#15803d;font-size:14px;margin:4px 0 0;font-weight:600;">Payment ID: {payment_id}</p>
+                </div>
+                <p style="color:#94a3b8;font-size:13px;margin:0;">The lister will contact you shortly to arrange move-in details.</p>
+              </td>
+            </tr>
+            <tr>
+              <td style="background:#f8fafc;padding:20px 40px;border-top:1px solid #e2e8f0;text-align:center;">
+                <p style="color:#94a3b8;font-size:12px;margin:0;">© 2025 Ez-Stay. All rights reserved.</p>
+              </td>
+            </tr>
+          </table>
+        </td></tr>
+      </table>
+    </body>
+    </html>
+    """
+    try:
+        _send_html_email(subject, email, html, plain)
+    except Exception as exc:
+        raise self.retry(exc=exc)
+
+
+@shared_task(bind=True, max_retries=3, default_retry_delay=60)
+def send_booking_received_email_task(self, email, lister_name, tenant_name, property_title, amount, payment_id):
+    subject = f'Advance Payment Received – {property_title}'
+    plain = f"Hi {lister_name}, {tenant_name} has paid ₹{amount} advance for {property_title}. Payment ID: {payment_id}"
+    html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head><meta charset="UTF-8"></head>
+    <body style="margin:0;padding:0;background-color:#f4f6f9;font-family:'Segoe UI',Arial,sans-serif;">
+      <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f6f9;padding:40px 0;">
+        <tr><td align="center">
+          <table width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+            <tr>
+              <td style="background:linear-gradient(135deg,#2563eb,#1d4ed8);padding:36px 40px;text-align:center;">
+                <h1 style="color:#ffffff;margin:0;font-size:24px;font-weight:700;">Ez-Stay</h1>
+                <p style="color:#bfdbfe;margin:8px 0 0;font-size:14px;">Payment Received</p>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:40px 40px 32px;">
+                <div style="text-align:center;margin-bottom:24px;">
+                  <span style="font-size:48px;">💰</span>
+                  <h2 style="color:#1e293b;font-size:22px;margin:12px 0 0;">Advance Payment Received!</h2>
+                </div>
+                <p style="color:#64748b;font-size:15px;line-height:1.6;margin:0 0 20px;">
+                  Hi <strong>{lister_name}</strong>, <strong>{tenant_name}</strong> has paid the advance for your property.
+                </p>
+                <div style="background:#f0f7ff;border-left:4px solid #2563eb;padding:16px 20px;border-radius:6px;margin-bottom:24px;">
+                  <p style="color:#1d4ed8;font-size:14px;margin:0;font-weight:600;">Property: {property_title}</p>
+                  <p style="color:#1d4ed8;font-size:14px;margin:4px 0 0;font-weight:600;">Tenant: {tenant_name}</p>
+                  <p style="color:#1d4ed8;font-size:14px;margin:4px 0 0;font-weight:600;">Amount: ₹{amount}</p>
+                  <p style="color:#1d4ed8;font-size:14px;margin:4px 0 0;font-weight:600;">Payment ID: {payment_id}</p>
+                </div>
+                <p style="color:#94a3b8;font-size:13px;margin:0;">Please contact the tenant to arrange move-in details.</p>
+              </td>
+            </tr>
+            <tr>
+              <td style="background:#f8fafc;padding:20px 40px;border-top:1px solid #e2e8f0;text-align:center;">
+                <p style="color:#94a3b8;font-size:12px;margin:0;">© 2025 Ez-Stay. All rights reserved.</p>
+              </td>
+            </tr>
+          </table>
+        </td></tr>
+      </table>
+    </body>
+    </html>
+    """
+    try:
+        _send_html_email(subject, email, html, plain)
+    except Exception as exc:
+        raise self.retry(exc=exc)

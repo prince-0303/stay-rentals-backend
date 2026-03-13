@@ -16,7 +16,7 @@ from drf_spectacular.utils import extend_schema, OpenApiResponse, inline_seriali
 
 class RegisterOrVerifyEmailView(APIView):
     """
-    PRODUCTION-READY Registration & Email Verification
+    Registration & Email Verification
     """
     permission_classes = [AllowAny]
     
@@ -32,7 +32,7 @@ class RegisterOrVerifyEmailView(APIView):
     
     def _handle_registration(self, data):
         """
-        User Registration (NO KYC data collected here)
+        User Registration
         """
         
         # Extract fields
@@ -90,7 +90,7 @@ class RegisterOrVerifyEmailView(APIView):
         
         pending_data = {
             'email': email,
-            'password': password,  # Will be hashed after verification
+            'password': password,
             'first_name': first_name,
             'last_name': last_name,
             'role': role,
@@ -108,15 +108,6 @@ class RegisterOrVerifyEmailView(APIView):
         
         # Send OTP email
         send_otp_email(email, otp_code, 'email_verification')
-        
-        # if settings.DEBUG:
-        #     print(f"\n{'='*70}")
-        #     print(f"📧 REGISTRATION STARTED")
-        #     print(f"{'='*70}")
-        #     print(f"Email: {email}")
-        #     print(f"Role: {role}")
-        #     print(f"OTP: {otp_code}")
-        #     print(f"{'='*70}\n")
         
         return Response({
             'detail': 'Registration successful! Please verify your email with the OTP sent.',
@@ -183,36 +174,25 @@ class RegisterOrVerifyEmailView(APIView):
                 User.objects.filter(email=email, is_email_verified=False).delete()
                 
                 # Create user
-                user = User.objects.create(
+                user = User.objects.create_user(
                     email=email,
+                    password=pending['password'],
                     first_name=pending['first_name'],
                     last_name=pending['last_name'],
                     role=pending['role'],
                     phone_number=pending.get('phone_number', ''),
                     is_email_verified=True,
                     is_active=True,
-                    # ⚠️ NO AADHAR DATA HERE - will be added via KYC endpoint
                 )
-                
-                user.set_password(pending['password'])
-                user.save()
                 
                 # Delete OTP
                 otp.delete()
-                
+                from auth_app.tasks import send_welcome_email_task
+                send_welcome_email_task.delay(user.email, user.first_name)
+
                 #  GENERATE JWT TOKENS FOR AUTO-LOGIN
                 from ..serializers import get_tokens_for_user
                 tokens = get_tokens_for_user(user)
-                
-                # if settings.DEBUG:
-                #     print(f"\n{'='*70}")
-                #     print(f"✅ USER CREATED & TOKENS GENERATED")
-                #     print(f"{'='*70}")
-                #     print(f"Email: {user.email}")
-                #     print(f"Role: {user.role}")
-                #     print(f"ID: {user.id}")
-                #     print(f"Access Token: {tokens['access'][:50]}...")
-                #     print(f"{'='*70}\n")
                 
                 # Different response based on role
                 if user.role == User.LISTER:
@@ -238,7 +218,6 @@ class RegisterOrVerifyEmailView(APIView):
         
         except Exception as e:
             if settings.DEBUG:
-                print(f"❌ Error creating user: {e}")
                 import traceback
                 traceback.print_exc()
             
@@ -259,7 +238,7 @@ class ResendOTPView(APIView):
             404: OpenApiResponse(description='No pending registration found for this email'),
         }
     )
-    
+
     def post(self, request):
         serializer = ResendOTPSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -299,9 +278,6 @@ class ResendOTPView(APIView):
             
             # Send new OTP
             send_otp_email(email, new_code, 'email_verification')
-            
-            if settings.DEBUG:
-                print(f"🔄 OTP resent to {email}: {new_code}")
             
             return Response(
                 {'detail': 'New OTP sent to your email!'},

@@ -116,6 +116,7 @@ class ChangePasswordSerializer(serializers.Serializer):
 
 class UserSerializer(serializers.ModelSerializer):
     full_name = serializers.CharField(source='get_full_name', read_only=True)
+    avatar = serializers.SerializerMethodField()
     
     class Meta:
         model = User
@@ -126,19 +127,28 @@ class UserSerializer(serializers.ModelSerializer):
             'is_kyc_submitted', 'kyc_submitted_at', 'kyc_verified_at',
         ]
 
+    def get_avatar(self, obj):
+        try:
+            if obj.role == User.LISTER and hasattr(obj, 'lister_profile') and obj.lister_profile.profile_picture:
+                return obj.lister_profile.profile_picture.url
+            elif hasattr(obj, 'profile') and obj.profile.profile_picture:
+                return obj.profile.profile_picture.url
+        except Exception:
+            pass
+        return None
 
 class UserLoginResponseSerializer(serializers.ModelSerializer):
     name = serializers.CharField(source='get_full_name', read_only=True)
     
     class Meta:
         model = User
-        fields = ['id', 'name', 'email', 'is_active', 'is_email_verified']
+        fields = ['id', 'name', 'email', 'role', 'is_active', 'is_email_verified']
 
 
 class UserUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ['first_name', 'last_name', 'phone_number', 'profile_picture']
+        fields = ['first_name', 'last_name', 'phone_number']
 
 
 def get_tokens_for_user(user):

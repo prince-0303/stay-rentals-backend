@@ -20,183 +20,30 @@ def generate_mfa_code(length=6):
 
 
 def send_verification_email(email, otp_code):
-    """Send email verification OTP"""
-    subject = 'Verify Your Email Address'
-    message = f"""
-Hello,
-
-Thank you for registering! Please use the following OTP to verify your email address:
-
-OTP Code: {otp_code}
-
-This code will expire in 10 minutes.
-
-If you did not request this, please ignore this email.
-
-Best regards,
-Accommodation Rentals
-    """
-    
-    if settings.DEBUG:
-        print("\n" + "="*70)
-        print("📧 EMAIL VERIFICATION OTP")
-        print("="*70)
-        print(f"📧 Email: {email}")
-        print(f"🔢 OTP Code: {otp_code}")
-        print(f"⏰ Valid for: 10 minutes")
-        print("="*70 + "\n")
-    
-    try:
-        result = send_mail(
-            subject=subject,
-            message=message,
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[email],
-            fail_silently=False,
-        )
-        
-        if settings.DEBUG:
-            print(f"✅ Email sent successfully! Result: {result}\n")
-        
-        logger.info(f"OTP sent to {email}")
-        return True
-        
-    except Exception as e:
-        logger.error(f"Error sending email: {e}")
-        if settings.DEBUG:
-            print(f"❌ Email sending failed: {str(e)}")
-            print(f"✅ But OTP is printed above: {otp_code}")
-            print("="*70 + "\n")
-        return False
+    """Send email verification OTP via Celery."""
+    from auth_app.tasks import send_verification_email_task
+    send_verification_email_task.delay(email, otp_code)
+    logger.info(f"Verification email task queued for {email}")
+    return True
 
 
 def send_otp_email(email, otp_code, otp_type):
-    """Send OTP via email for different purposes"""
-    subject_map = {
-        'password_reset': 'Reset Your Password',
-        'email_verification': 'Verify Your Email Address',
-    }
-    
-    message_map = {
-        'password_reset': f"""
-Hello,
-
-You have requested to reset your password. Please use the following OTP:
-
-OTP Code: {otp_code}
-
-This code will expire in 10 minutes.
-
-If you did not request this, please ignore this email.
-
-Best regards,
-Accommodation Rentals
-        """,
-        'email_verification': f"""
-Hello,
-
-Thank you for registering! Please use the following OTP to verify your email address:
-
-OTP Code: {otp_code}
-
-This code will expire in 10 minutes.
-
-If you did not request this, please ignore this email.
-
-Best regards,
-Accommodation Rentals
-        """,
-    }
-    
-    subject = subject_map.get(otp_type, 'Your OTP Code')
-    message = message_map.get(otp_type, f'Your OTP code is: {otp_code}')
-    
-    if settings.DEBUG:
-        type_emoji = "📧" if otp_type == 'email_verification' else "🔑"
-        type_name = otp_type.replace('_', ' ').title()
-        
-        print("\n" + "="*70)
-        print(f"{type_emoji} {type_name} OTP")
-        print("="*70)
-        print(f"📧 Email: {email}")
-        print(f"🔢 OTP Code: {otp_code}")
-        print(f"📝 Type: {otp_type}")
-        print(f"⏰ Valid for: 10 minutes")
-        print("="*70 + "\n")
-    
-    try:
-        result = send_mail(
-            subject=subject,
-            message=message,
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[email],
-            fail_silently=False,
-        )
-        
-        if settings.DEBUG:
-            print(f"✅ Email sent successfully! Result: {result}\n")
-        
-        logger.info(f"OTP sent to {email}")
-        return True
-        
-    except Exception as e:
-        logger.error(f"Error sending email: {e}")
-        if settings.DEBUG:
-            print(f"❌ Email sending failed: {str(e)}")
-            print(f"✅ But OTP is printed above: {otp_code}")
-            print("="*70 + "\n")
-        return False
+    """Send OTP via email for different purposes via Celery."""
+    from auth_app.tasks import send_verification_email_task, send_password_reset_email_task
+    if otp_type == 'password_reset':
+        send_password_reset_email_task.delay(email, otp_code)
+    else:
+        send_verification_email_task.delay(email, otp_code)
+    logger.info(f"OTP email task queued for {email} ({otp_type})")
+    return True
 
 
 def send_mfa_email(user, code):
-    """Send MFA code via email"""
-    subject = 'Your MFA Verification Code'
-    message = f"""
-Hello {user.first_name},
-
-Your MFA verification code is:
-
-{code}
-
-This code will expire in 10 minutes.
-
-If you did not request this code, please secure your account immediately.
-
-Best regards,
-Accommodation Rentals Security Team
-    """
-    
-    # if settings.DEBUG:
-    #     print("\n" + "="*70)
-    #     print("🔐 MFA EMAIL VERIFICATION CODE")
-    #     print("="*70)
-    #     print(f"📧 Email: {user.email}")
-    #     print(f"🔢 Code: {code}")
-    #     print(f"⏰ Valid for: 10 minutes")
-    #     print("="*70 + "\n")
-    
-    try:
-        result = send_mail(
-            subject=subject,
-            message=message,
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[user.email],
-            fail_silently=False,
-        )
-        
-        if settings.DEBUG:
-            print(f"✅ MFA email sent successfully! Result: {result}\n")
-        
-        logger.info(f"MFA code sent to {user.email}")
-        return True
-        
-    except Exception as e:
-        logger.error(f"Error sending MFA email to {user.email}: {e}")
-        # if settings.DEBUG:
-        #     print(f"❌ Email sending failed: {str(e)}")
-        #     print(f"✅ But code is printed above: {code}")
-        #     print("="*70 + "\n")
-        return False
+    """Send MFA code via Celery."""
+    from auth_app.tasks import send_mfa_email_task
+    send_mfa_email_task.delay(user.email, user.first_name, code)
+    logger.info(f"MFA email task queued for {user.email}")
+    return True
 
 
 def create_mfa_verification_code(user, method_type):

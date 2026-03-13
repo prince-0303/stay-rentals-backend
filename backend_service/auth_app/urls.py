@@ -7,6 +7,7 @@ from .views import (
     PasswordResetConfirmView,
     ChangePasswordView,
     UserProfileView,
+    UserAvatarUploadView,
 )
 from .views import (
     RegisterOrVerifyEmailView,
@@ -30,6 +31,7 @@ from .views import (
     MFALoginVerifyView,
 )
 from .views import CookieTokenRefreshView
+from .views import DeactivateAccountView, DeleteAccountView
 
 
 
@@ -52,6 +54,7 @@ urlpatterns = [
     
     # User Profile
     path('profile/', UserProfileView.as_view(), name='profile'),
+    path('profile/avatar/', UserAvatarUploadView.as_view(), name='profile-avatar'),
     
     # KYC - Lister
     path('kyc/status/', KYCStatusView.as_view(), name='kyc-status'),
@@ -80,4 +83,7 @@ urlpatterns = [
     # Token
     path('token/refresh/', CookieTokenRefreshView.as_view(), name='token-refresh'),
 
+    # Account activity
+    path('account/deactivate/', DeactivateAccountView.as_view(), name='account-deactivate'),
+    path('account/delete/', DeleteAccountView.as_view(), name='account-delete'),
 ]
