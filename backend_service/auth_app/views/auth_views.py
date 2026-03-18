@@ -36,7 +36,7 @@ def _set_auth_cookies(response, tokens):
         value=tokens['access'],
         httponly=True,
         secure=False,
-        samesite='Lax',
+        samesite='None',
         max_age=900,
     )
     response.set_cookie(
@@ -44,7 +44,7 @@ def _set_auth_cookies(response, tokens):
         value=tokens['refresh'],
         httponly=True,
         secure=False,
-        samesite='Lax',
+        samesite='None',
         max_age=604800,
     )
     return response
@@ -303,9 +303,9 @@ class CookieTokenRefreshView(TokenRefreshView):
         if response.status_code == 200:
             new_access = response.data.get('access')
             new_refresh = response.data.get('refresh')
-            response.set_cookie('access_token', new_access, httponly=True, secure=False, samesite='Lax', max_age=3600)
+            response.set_cookie('access_token', new_access, httponly=True, secure=False, samesite='None', max_age=3600)
             if new_refresh:
-                response.set_cookie('refresh_token', new_refresh, httponly=True, secure=False, samesite='Lax', max_age=604800)
+                response.set_cookie('refresh_token', new_refresh, httponly=True, secure=False, samesite='None', max_age=604800)
             response.data = {'detail': 'Token refreshed successfully'}
 
         return response
