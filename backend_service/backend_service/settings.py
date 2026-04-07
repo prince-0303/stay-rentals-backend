@@ -9,7 +9,11 @@ SECRET_KEY = config("SECRET_KEY")
 
 DEBUG = config("DEBUG", cast=bool, default=True)
 
-ALLOWED_HOSTS = config("ALLOWED_HOSTS", default="localhost,127.0.0.1").split(",")
+ALLOWED_HOSTS = [
+    "chicago-star-liquid-helmet.trycloudflare.com",
+    "localhost",
+    "127.0.0.1",
+]
 
 
 INSTALLED_APPS = [
@@ -53,26 +57,12 @@ MIDDLEWARE = [
 
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOWED_ORIGINS = [
-    "http://localhost",
+    "https://stay-rentals.vercel.app",
     "http://localhost:5173",
-    "http://localhost:5174",
-    "http://localhost:3000",
-    "http://127.0.0.1:5173",
-    "http://127.0.0.1:5174",
-    "http://127.0.0.1:3000",
-    "https://stay-rentals-frontend.vercel.app",
-    "https://chicago-star-liquid-helmet.trycloudflare.com",
 ]
 CSRF_TRUSTED_ORIGINS = [
-    "http://localhost",
-    "http://localhost:5173",
-    "http://localhost:5174",
-    "http://localhost:3000",
-    "http://127.0.0.1:5173",
-    "http://127.0.0.1:5174",
-    "http://127.0.0.1:3000",
-    "https://stay-rentals-frontend.vercel.app",
     "https://chicago-star-liquid-helmet.trycloudflare.com",
+    "https://stay-rentals.vercel.app",
 ]
 
 
@@ -266,6 +256,14 @@ CHATBOT_SERVICE_URL = config('CHATBOT_SERVICE_URL', default='http://chatbot:8001
 
 MESSAGE_ENCRYPTION_KEY = config('MESSAGE_ENCRYPTION_KEY')
 
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels_redis.core.RedisChannelLayer',
+        'CONFIG': {
+            'hosts': [('redis', 6379)], 
+        },
+    },
+}
 
 # Disable auto-reloader when using Daphne
 import sys
