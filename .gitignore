@@ -17,4 +17,11 @@ db.sqlite3
 
 # Environment variables
 .env
-backend_service/firebase-service-account.json
+
+# Firebase
+firebase-service-account.json
+
+
+chat_token
+conversations
+cookies.txt

@@ -1,161 +1,275 @@
-# Stay Rentals
+# 🏠 Stay Rentals — Accommodation Rental Platform
 
-A full-stack microservices-based accommodation rental platform built with Django, React.js, and FastAPI. Designed to simplify the process of discovering, booking, and managing rental properties — inspired by the real-world difficulty of finding accommodation when relocating.
+> A full-stack accommodation rental platform built to solve a real problem — helping students and working professionals find verified stays in unfamiliar cities, with AI-powered search, real-time chat, and secure booking.
 
----
-
-## Features
-
-- **Map-Based Property Discovery** — Browse and filter properties on an interactive map powered by React Leaflet and OpenStreetMap
-- **RAG-Based AI Search** — Natural language property search powered by Groq LLaMA 3.3 70B and ChromaDB
-- **Real-Time Encrypted Chat** — Secure messaging between tenants and landlords via WebSockets
-- **Advance Payment & Property Locking** — Reserve properties with advance payment to prevent double-booking
-- **JWT Authentication with MFA** — Secure login with multi-factor authentication and Google OAuth
-- **KYC-Based Admin Moderation** — Identity verification flow for listing approval and trust management
-- **Cloudinary Integration** — Optimized media storage and delivery for property images
-- **Firebase Notifications** — Real-time push notifications for bookings and messages
+🌐 **Live Demo:** [stay-rentals.vercel.app](https://stay-rentals.vercel.app/login)  
 
 ---
 
-## Tech Stack
+## 📌 The Problem
 
-**Backend**
-- Django, Django REST Framework
-- FastAPI (AI microservice)
-- PostgreSQL
-- Redis & Celery (async tasks and background jobs)
-- WebSockets (real-time communication)
-- ChromaDB (vector store for RAG)
+Moving to a new city — especially as a student or a young professional — is stressful. Finding affordable, trustworthy accommodation involves scrolling through unreliable listings, struggling to communicate with owners, and often making decisions without ever visiting the place.
 
-**Frontend**
-- React.js 19 (Vite)
-- React Leaflet + Leaflet.js — interactive maps with OpenStreetMap tiles
-- Tailwind CSS
-- Recharts (data visualization)
-- Axios (HTTP client)
-- React Router DOM
-
-**Infrastructure**
-- Docker & Docker Compose
-- Nginx (reverse proxy)
-- AWS EC2 (Mumbai region)
-- Cloudflare Tunnel
-- Vercel (frontend deployment)
-
-**Integrations**
-- Groq LLaMA 3.3 70B (AI search)
-- Cloudinary (media)
-- Firebase (notifications)
-- Google OAuth
+This platform was built from personal experience after facing exactly this situation while relocating to Kochi. The goal was to build something that actually solves it — with AI-driven discovery, direct owner communication, map-based exploration, and secure advance booking.
 
 ---
 
-## Architecture
+## ✨ Key Features
 
-Stay Rentals follows a microservices architecture with two backend services:
+### 🤖 AI-Powered Search & Recommendations
+- Natural language property search — users can type *"2BHK near IT park under ₹10,000"* and get relevant results
+- RAG-based recommendation engine using **ChromaDB**, **sentence transformers**, and **Groq (LLaMA 3.3 70B)**
+- AI-powered listing comparisons to help users make informed decisions
+- Asynchronous ChromaDB sync via **Celery** to keep vector embeddings up to date
 
-1. **Core Service** (Django/DRF) — Handles authentication, property listings, bookings, payments, and real-time chat
-2. **AI Service** (FastAPI) — Manages RAG-based natural language search using ChromaDB and Groq
+### 💬 Real-Time Chat
+- Bidirectional chat between tenants and property listers
+- Built with **Django Channels**, **WebSockets**, and **Redis** via **Daphne ASGI server**
+- All messages **encrypted at rest** using Fernet symmetric encryption
 
-Both services run in Docker containers behind an Nginx reverse proxy, deployed on AWS EC2.
+### 🗺️ Map-Based Property Discovery
+- Interactive property maps powered by **Leaflet.js** and **OpenStreetMap**
+- Automatic geocoding of property addresses to coordinates
+- Live filters and marker-based navigation for intuitive browsing
+
+### 🔐 Comprehensive Authentication
+- **JWT** with HttpOnly cookies for stateless, XSS-safe sessions
+- **Google OAuth** for one-click sign-in
+- **OTP email verification** on registration
+- **TOTP-based MFA** (Google Authenticator compatible)
+- **Role-Based Access Control (RBAC)** — Users, Listers, and Admins have distinct permissions
+
+### 📅 Booking & Scheduling
+- Users can send **visit schedule requests** to listers for in-person property tours
+- **Advance payment** gateway integration to reserve a property
+- Once an advance is paid, the listing is marked unavailable — preventing double bookings
+
+### 🛡️ Admin Panel
+- Full control over user management and KYC document review
+- Property moderation and listing approvals
+- Visit schedule oversight and platform-wide analytics
+
+### 📎 Media & Notifications
+- Property images stored and served via **Cloudinary**
+- Push notifications via **Firebase Cloud Messaging**
+- Email dispatching (OTP, confirmations) handled asynchronously via **Celery + Redis**
 
 ---
 
-## Getting Started
+## 🏗️ Architecture
+
+This platform follows a **microservices architecture** with two independent backend services:
+
+```
+┌─────────────────────────────┐       ┌──────────────────────────────┐
+│     Django Backend Service  │       │    FastAPI AI/Chatbot Service │
+│                             │       │                              │
+│  - Authentication (JWT,     │       │  - RAG Search Engine         │
+│    OAuth, MFA, OTP)         │       │  - AI Recommendations        │
+│  - Property Management      │       │  - FAQ Chatbot               │
+│  - Real-time Chat           │◄─────►│  - ChromaDB Vector Store     │
+│    (WebSockets/Channels)    │       │  - Groq LLM Integration      │
+│  - Bookings & Payments      │       │  - Sentence Transformers     │
+│  - Admin Panel              │       │                              │
+│  - Notifications (Firebase) │       └──────────────────────────────┘
+│  - Celery Background Tasks  │
+└─────────────────────────────┘
+             ▲
+             │
+     ┌───────┴────────┐
+     │  Nginx Reverse │
+     │     Proxy      │
+     │                │
+     │ - WS Upgrade   │
+     │ - Static Files │
+     │ - Upstream     │
+     │   Routing      │
+     └───────┬────────┘
+             │
+     ┌───────┴────────┐
+     │ React Frontend │
+     │  (Vercel CDN)  │
+     └────────────────┘
+```
+
+---
+
+## 🛠️ Tech Stack
+
+| Layer | Technologies |
+|---|---|
+| **Frontend** | React.js, Leaflet.js |
+| **Backend (Core)** | Django, Django REST Framework |
+| **Backend (AI)** | FastAPI |
+| **Real-time** | Django Channels, WebSockets, Daphne ASGI |
+| **AI / ML** | ChromaDB, Sentence Transformers, Groq (LLaMA 3.3 70B) |
+| **Database** | PostgreSQL |
+| **Cache / Queue** | Redis, Celery |
+| **Auth** | JWT (HttpOnly cookies), Google OAuth, TOTP MFA, OTP Email |
+| **Media Storage** | Cloudinary |
+| **Maps** | OpenStreetMap, Leaflet.js |
+| **Notifications** | Firebase Cloud Messaging |
+| **DevOps** | Docker, Docker Compose, Nginx |
+| **Deployment** | Vercel (Frontend) |
+
+---
+
+## 📁 Project Structure
+
+```
+.
+├── backend_service/               # Django Core Service
+│   ├── auth_app/                  # JWT, OAuth, MFA, OTP
+│   ├── chat_app/                  # WebSocket chat + encryption
+│   ├── chatbot_app/               # Chatbot relay to FastAPI
+│   ├── property_app/              # Listings, geocoding, filters
+│   ├── payments_app/              # Advance payment & property locking
+│   ├── notifications_app/         # Firebase push notifications
+│   ├── profile_app/               # User profiles
+│   ├── adminpanel/                # KYC, moderation, analytics
+│   ├── nginx/nginx.conf           # Reverse proxy config
+│   └── docker-compose.yml
+│
+└── chatbot_service/               # FastAPI AI Service
+    ├── rag/                       # RAG pipeline
+    │   ├── chain.py               # LLM chain setup
+    │   ├── embeddings.py          # Sentence transformer embeddings
+    │   ├── property_chain.py      # Property-specific RAG
+    │   └── property_embeddings.py # Property vector ingestion
+    ├── routers/
+    │   ├── faq_bot.py             # FAQ chatbot endpoint
+    │   └── recommendations.py     # AI recommendation endpoint
+    ├── docs/                      # RAG knowledge base (FAQ, policies)
+    └── chroma_db/                 # Persisted vector store
+```
+
+---
+
+## 🚀 Getting Started
 
 ### Prerequisites
 
 - Docker & Docker Compose
-- Python 3.11+
-- Node.js 18+
-- PostgreSQL
-- Redis
+- Node.js (for frontend)
+- A Groq API key ([console.groq.com](https://console.groq.com))
+- Cloudinary account
+- Firebase project (for push notifications)
+- Google OAuth credentials
 
-### Clone the Repository
+### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/prince-0303/stay-rentals-backend.git
-cd stay-rentals-backend
+git clone https://github.com/prince-0303/stay-rentals.git
+cd stay-rentals
 ```
 
-### Environment Variables
+### 2. Configure Environment Variables
 
-Create a `.env` file in the root directory. Required variables:
+Create a `.env` file inside `backend_service/`:
 
 ```env
-# Django
-SECRET_KEY=your_secret_key
+SECRET_KEY=your_django_secret_key
 DEBUG=False
-ALLOWED_HOSTS=your_domain_or_ip
+DATABASE_URL=postgresql://user:password@db:5432/stayrentals
 
-# Database
-DATABASE_URL=postgresql://user:password@db:5432/stay_rentals
-
-# Redis
-REDIS_URL=redis://redis:6379/0
-
-# Groq
-GROQ_API_KEY=your_groq_api_key
+# Auth
+GOOGLE_CLIENT_ID=your_google_client_id
+GOOGLE_CLIENT_SECRET=your_google_client_secret
 
 # Cloudinary
 CLOUDINARY_CLOUD_NAME=your_cloud_name
 CLOUDINARY_API_KEY=your_api_key
 CLOUDINARY_API_SECRET=your_api_secret
 
-# Firebase
-FIREBASE_CREDENTIALS_JSON=path_to_credentials.json
+# Redis
+REDIS_URL=redis://redis:6379/0
 
-# Google OAuth
-GOOGLE_CLIENT_ID=your_google_client_id
-GOOGLE_CLIENT_SECRET=your_google_client_secret
+# Email
+EMAIL_HOST_USER=your_email@gmail.com
+EMAIL_HOST_PASSWORD=your_app_password
+
+# Payment Gateway
+PAYMENT_API_KEY=your_payment_key
 ```
 
-### Run with Docker
+Create a `.env` inside `chatbot_service/`:
+
+```env
+GROQ_API_KEY=your_groq_api_key
+```
+
+### 3. Run with Docker Compose
 
 ```bash
+cd backend_service
 docker-compose up --build
 ```
 
-The backend will be available at `http://localhost:8000`.
+This starts:
+- Django backend (port 8000)
+- FastAPI chatbot service (port 8001)
+- PostgreSQL database
+- Redis instance
+- Celery worker
+- Nginx reverse proxy (port 80)
 
----
+### 4. Run Frontend
 
-## Project Structure
-
-```
-stay-rentals-backend/
-├── core/                   # Main Django application
-│   ├── accounts/           # Authentication, MFA, OAuth
-│   ├── properties/         # Listings, search, map data
-│   ├── bookings/           # Reservations and payments
-│   ├── chat/               # WebSocket real-time chat
-│   └── moderation/         # KYC and admin tools
-├── ai_service/             # FastAPI RAG service
-│   ├── search/             # LLM + ChromaDB integration
-│   └── embeddings/         # Vector indexing
-├── nginx/                  # Nginx config
-├── docker-compose.yml
-└── README.md
+```bash
+cd frontend
+npm install
+npm run dev
 ```
 
 ---
 
-## Deployment
+## 🧠 How the AI Search Works
 
-The project is configured for deployment on AWS EC2 (free tier, Mumbai region) using Docker Compose and Nginx. The frontend is hosted on Vercel. A Cloudflare tunnel handles external access with automated environment variable updates on the frontend via the Vercel API.
+```
+User types: "affordable 1BHK near Infopark Kochi"
+        │
+        ▼
+FastAPI /recommendations endpoint
+        │
+        ▼
+Sentence Transformer encodes query → embedding vector
+        │
+        ▼
+ChromaDB similarity search over indexed property listings
+        │
+        ▼
+Top-k matching listings retrieved
+        │
+        ▼
+Groq LLaMA 3.3 70B generates natural language comparison & recommendation
+        │
+        ▼
+Results returned to React frontend with ranked listings
+```
 
-> **Note:** Deployment is currently in progress. The backend services run successfully on EC2, but a session persistence issue after login is under investigation — likely related to cookie/CORS configuration across the Cloudflare tunnel and Vercel frontend.
+Property data is synced into ChromaDB asynchronously via a **Celery periodic task** so the vector store always reflects the latest listings without blocking the main API.
 
 ---
 
-## GitHub
+## 🔒 Security Highlights
 
-- Backend : [github.com/prince-0303/stay-rentals-backend](https://github.com/prince-0303/stay-rentals-backend)
-- Frontend: [github.com/prince-0303/stay-rentals-backend](https://github.com/prince-0303/stay-rentals-frontend)
-- Profile: [github.com/prince-0303](https://github.com/prince-0303)
+- JWT stored in **HttpOnly cookies** — not localStorage, protected against XSS
+- Chat messages **encrypted at rest** with Fernet symmetric encryption
+- **TOTP-based MFA** support for accounts requiring higher security
+- **RBAC** enforced at the API layer for all role-sensitive endpoints
+- **KYC document verification** required for property listers before listings go live
 
 ---
 
-## License
+## 🤝 Contributing
 
-This project is for portfolio and demonstration purposes.
+Pull requests are welcome. For major changes, please open an issue first to discuss what you'd like to change.
+
+---
+
+## 👤 Author
+
+**Prince Biju**  
+Python Django Developer  
+📧 princebiju.dev@gmail.com  
+💼 [LinkedIn](https://www.linkedin.com/in/princebiju/)
