@@ -1,12 +1,12 @@
-# 🏠 Stay Rentals — Accommodation Rental Platform
+# Stay Rentals — Accommodation Rental Platform
 
 > A full-stack accommodation rental platform built to solve a real problem — helping students and working professionals find verified stays in unfamiliar cities, with AI-powered search, real-time chat, and secure booking.
 
-🌐 **Live Demo:** [stay-rentals.vercel.app](https://stay-rentals.vercel.app/login)  
+**Live Demo:** [stay-rentals.vercel.app](https://stay-rentals.vercel.app/login)  
 
 ---
 
-## 📌 The Problem
+## The Problem
 
 Moving to a new city — especially as a student or a young professional — is stressful. Finding affordable, trustworthy accommodation involves scrolling through unreliable listings, struggling to communicate with owners, and often making decisions without ever visiting the place.
 
@@ -14,49 +14,49 @@ This platform was built from personal experience after facing exactly this situa
 
 ---
 
-## ✨ Key Features
+## Key Features
 
-### 🤖 AI-Powered Search & Recommendations
+### AI-Powered Search & Recommendations
 - Natural language property search — users can type *"2BHK near IT park under ₹10,000"* and get relevant results
 - RAG-based recommendation engine using **ChromaDB**, **sentence transformers**, and **Groq (LLaMA 3.3 70B)**
 - AI-powered listing comparisons to help users make informed decisions
 - Asynchronous ChromaDB sync via **Celery** to keep vector embeddings up to date
 
-### 💬 Real-Time Chat
+### Real-Time Chat
 - Bidirectional chat between tenants and property listers
 - Built with **Django Channels**, **WebSockets**, and **Redis** via **Daphne ASGI server**
 - All messages **encrypted at rest** using Fernet symmetric encryption
 
-### 🗺️ Map-Based Property Discovery
+### Map-Based Property Discovery
 - Interactive property maps powered by **Leaflet.js** and **OpenStreetMap**
 - Automatic geocoding of property addresses to coordinates
 - Live filters and marker-based navigation for intuitive browsing
 
-### 🔐 Comprehensive Authentication
+### Comprehensive Authentication
 - **JWT** with HttpOnly cookies for stateless, XSS-safe sessions
 - **Google OAuth** for one-click sign-in
 - **OTP email verification** on registration
 - **TOTP-based MFA** (Google Authenticator compatible)
 - **Role-Based Access Control (RBAC)** — Users, Listers, and Admins have distinct permissions
 
-### 📅 Booking & Scheduling
+### Booking & Scheduling
 - Users can send **visit schedule requests** to listers for in-person property tours
 - **Advance payment** gateway integration to reserve a property
 - Once an advance is paid, the listing is marked unavailable — preventing double bookings
 
-### 🛡️ Admin Panel
+### Admin Panel
 - Full control over user management and KYC document review
 - Property moderation and listing approvals
 - Visit schedule oversight and platform-wide analytics
 
-### 📎 Media & Notifications
+### Media & Notifications
 - Property images stored and served via **Cloudinary**
 - Push notifications via **Firebase Cloud Messaging**
 - Email dispatching (OTP, confirmations) handled asynchronously via **Celery + Redis**
 
 ---
 
-## 🏗️ Architecture
+## Architecture
 
 This platform follows a **microservices architecture** with two independent backend services:
 
@@ -94,7 +94,7 @@ This platform follows a **microservices architecture** with two independent back
 
 ---
 
-## 🛠️ Tech Stack
+## Tech Stack
 
 | Layer | Technologies |
 |---|---|
@@ -114,7 +114,7 @@ This platform follows a **microservices architecture** with two independent back
 
 ---
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 .
@@ -145,7 +145,7 @@ This platform follows a **microservices architecture** with two independent back
 
 ---
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
 
@@ -223,7 +223,7 @@ npm run dev
 
 ---
 
-## 🧠 How the AI Search Works
+## How the AI Search Works
 
 ```
 User types: "affordable 1BHK near Infopark Kochi"
@@ -251,7 +251,7 @@ Property data is synced into ChromaDB asynchronously via a **Celery periodic tas
 
 ---
 
-## 🔒 Security Highlights
+## Security Highlights
 
 - JWT stored in **HttpOnly cookies** — not localStorage, protected against XSS
 - Chat messages **encrypted at rest** with Fernet symmetric encryption
@@ -261,15 +261,15 @@ Property data is synced into ChromaDB asynchronously via a **Celery periodic tas
 
 ---
 
-## 🤝 Contributing
+## Contributing
 
 Pull requests are welcome. For major changes, please open an issue first to discuss what you'd like to change.
 
 ---
 
-## 👤 Author
+## Author
 
 **Prince Biju**  
 Python Django Developer  
-📧 princebiju.dev@gmail.com  
-💼 [LinkedIn](https://www.linkedin.com/in/princebiju/)
+princebiju.dev@gmail.com  
+[LinkedIn](https://www.linkedin.com/in/princebiju/)
