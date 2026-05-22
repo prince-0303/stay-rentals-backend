@@ -81,7 +81,7 @@ urlpatterns = [
     path('mfa/verify/', MFALoginVerifyView.as_view(), name='mfa-verify'),
 
     # Token
-    path('token/refresh/', CookieTokenRefreshView.as_view(), name='token-refresh'),
+    path('auth/token/refresh/', CookieTokenRefreshView.as_view(), name='token_refresh'),
 
     # Account activity
     path('account/deactivate/', DeactivateAccountView.as_view(), name='account-deactivate'),

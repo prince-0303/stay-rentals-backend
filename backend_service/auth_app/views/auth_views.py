@@ -7,7 +7,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenRefreshView
 from rest_framework_simplejwt.exceptions import TokenError, InvalidToken
 from drf_spectacular.utils import extend_schema, OpenApiResponse
-
+from django.conf import settings
 from ..models import User, MFASession
 from ..serializers import (
     UserLoginSerializer, UserLoginResponseSerializer, get_tokens_for_user,
@@ -30,22 +30,25 @@ logger = logging.getLogger(__name__)
 # ─── HELPERS ──────────────────────────────────────────────────────────────────
 
 def _set_auth_cookies(response, tokens):
-    """Attach access_token and refresh_token as httpOnly cookies."""
+    # This checks if DEBUG is True (Local) or False (Production)
+    is_production = not settings.DEBUG 
+
     response.set_cookie(
         key='access_token',
         value=tokens['access'],
         httponly=True,
-        secure=False,
-        samesite='None',
-        max_age=900,
+        # Rules: If Secure is False, SameSite MUST be 'Lax'
+        secure=is_production,          
+        samesite='None' if is_production else 'Lax',
+        max_age=3600, # Matches your 60-minute token life
     )
     response.set_cookie(
         key='refresh_token',
         value=tokens['refresh'],
         httponly=True,
-        secure=False,
-        samesite='None',
-        max_age=604800,
+        secure=is_production,
+        samesite='None' if is_production else 'Lax',
+        max_age=604800, # 7 days
     )
     return response
 
