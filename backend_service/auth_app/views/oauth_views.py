@@ -46,16 +46,16 @@ class GoogleLoginView(APIView):
                 'access_token',
                 tokens['access'],
                 httponly=True,
-                secure=False,
-                samesite='Lax',
+                secure=True,
+                samesite='None',
                 max_age=60 * 60,
             )
             response.set_cookie(
                 'refresh_token',
                 tokens['refresh'],
                 httponly=True,
-                secure=False,
-                samesite='Lax',
+                secure=True,
+                samesite='None',
                 max_age=60 * 60 * 24 * 7,
             )
 

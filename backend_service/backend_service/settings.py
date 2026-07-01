@@ -9,11 +9,7 @@ SECRET_KEY = config("SECRET_KEY")
 
 DEBUG = config("DEBUG", cast=bool, default=True)
 
-ALLOWED_HOSTS = [
-    "chicago-star-liquid-helmet.trycloudflare.com",
-    "localhost",
-    "127.0.0.1",
-]
+ALLOWED_HOSTS = ['ez-stay.duckdns.org', '13.127.212.13', 'localhost', '127.0.0.1']
 
 
 INSTALLED_APPS = [
@@ -59,12 +55,14 @@ CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOWED_ORIGINS = [
     "https://stay-rentals.vercel.app",
     "http://localhost:5173",
-]
-CSRF_TRUSTED_ORIGINS = [
-    "https://chicago-star-liquid-helmet.trycloudflare.com",
-    "https://stay-rentals.vercel.app",
+    "https://stay-rentals-admin.vercel.app",
 ]
 
+CSRF_TRUSTED_ORIGINS = [
+    'https://ez-stay.duckdns.org',
+    
+]
+CORS_EXPOSE_HEADERS = ['Content-Type', 'X-CSRFToken']
 
 AUTH_USER_MODEL = 'auth_app.User'
 
@@ -148,6 +146,21 @@ USE_I18N = True
 USE_TZ = True
 
 
+APPEND_SLASH = True
+#Tell Django it's behind a Secure Proxy
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+# Session/Cookie Security
+SESSION_COOKIE_SECURE = True
+CSRF_COOKIE_SECURE = True
+
+# SameSite settings (CRITICAL for Cross-Domain Vercel -> Cloudflare)
+# This allows the cookie to be sent from stay-rentals.vercel.app to trycloudflare.com
+SESSION_COOKIE_SAMESITE = 'None'
+CSRF_COOKIE_SAMESITE = 'None'
+SESSION_COOKIE_DOMAIN = None
+CSRF_COOKIE_DOMAIN = None
+
+
 # Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
@@ -176,11 +189,16 @@ SIMPLE_JWT = {
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
-    'auth_app.authentication.CookieJWTAuthentication',
-],
-'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+        'auth_app.authentication.CookieJWTAuthentication',
+    ],
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',
+    ],
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
 }
 
+USE_X_FORWARDED_HOST = True
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
@@ -201,6 +219,7 @@ CLOUDINARY_STORAGE = {
     'CLOUD_NAME': config('CLOUDINARY_CLOUD_NAME'),
     'API_KEY': config('CLOUDINARY_API_KEY'),
     'API_SECRET': config('CLOUDINARY_API_SECRET'),
+    'SECURE': True,
 }
 
 
@@ -211,7 +230,7 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 if not DEBUG:
     # HTTPS
-    SECURE_SSL_REDIRECT = True
+    SECURE_SSL_REDIRECT = False
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
     
@@ -225,9 +244,10 @@ if not DEBUG:
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_PRELOAD = True
 
-SESSION_COOKIE_SAMESITE = 'Lax'
-CSRF_COOKIE_SAMESITE = 'Lax'
+SESSION_COOKIE_SAMESITE = 'None'
+CSRF_COOKIE_SAMESITE = 'None'
 SESSION_COOKIE_HTTPONLY = True
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 # ─── Celery ───────────────────────────────────────────────────────────────────
 CELERY_BROKER_URL = config('REDIS_URL', default='redis://redis:6379/0')
