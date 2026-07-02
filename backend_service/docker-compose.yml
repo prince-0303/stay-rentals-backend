@@ -43,7 +43,6 @@ services:
     depends_on:
       - db
       - redis
-      - chatbot
     networks:
       - app-network
 
