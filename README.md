@@ -2,7 +2,7 @@
 
 > A full-stack accommodation rental platform built to solve a real problem — helping students and working professionals find verified stays in unfamiliar cities, with AI-powered search, real-time chat, and secure booking.
 
-🌐 **Live Demo:** [stay-rentals.vercel.app](https://stay-rentals.vercel.app/login)  
+🌐 **Live Demo:** [stay-rentals.vercel.app](https://stay-rentals.vercel.app/)  
 
 ---
 
