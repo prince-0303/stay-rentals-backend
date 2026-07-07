@@ -520,7 +520,7 @@ class MFALoginVerifyView(APIView):
             key='access_token',
             value=tokens['access'],
             httponly=True,
-            secure=False,  # Set True in production
+            secure=True,  # Set True in production
             samesite='Lax',
             max_age=900,
         )
@@ -530,7 +530,7 @@ class MFALoginVerifyView(APIView):
             key='refresh_token',
             value=tokens['refresh'],
             httponly=True,
-            secure=False,  # Set True in production
+            secure=True,  # Set True in production
             samesite='Lax',
             max_age=604800,
         )

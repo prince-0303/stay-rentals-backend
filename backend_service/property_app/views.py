@@ -2,7 +2,7 @@ import math
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnly
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema, OpenApiParameter
@@ -43,7 +43,7 @@ def is_admin(user):
 # ─── Property Views ────────────────────────────────────────────────────────────
 
 class PropertyListView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticatedOrReadOnly]
 
     @extend_schema(
         summary="Browse all active properties",
@@ -119,7 +119,10 @@ class PropertyCreateView(APIView):
 
 
 class PropertyDetailView(APIView):
-    permission_classes = [IsAuthenticated]
+    def get_permissions(self):
+        if self.request.method == 'GET':
+            return []
+        return [IsAuthenticated()]
 
     @extend_schema(
         summary="Get property details",
