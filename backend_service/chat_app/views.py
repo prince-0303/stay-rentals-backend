@@ -8,6 +8,8 @@ from .models import Conversation, Message
 from .serializers import ConversationSerializer, MessageSerializer
 from auth_app.serializers import get_tokens_for_user
 from property_app.models import Property
+from channels.layers import get_channel_layer
+from asgiref.sync import async_to_sync
 
 
 class ConversationListCreateView(APIView):
@@ -60,6 +62,7 @@ class MessageListView(APIView):
         content = request.data.get('content', '').strip()
         if not content:
             return Response({"error": "Message content is required."}, status=status.HTTP_400_BAD_REQUEST)
+
         message = Message.objects.create(
             conversation=conversation,
             sender=request.user,
@@ -67,6 +70,53 @@ class MessageListView(APIView):
         )
         conversation.updated_at = message.created_at
         conversation.save(update_fields=['updated_at'])
+
+        # Determine recipient (the other party in the conversation)
+        recipient = conversation.lister if request.user == conversation.user else conversation.user
+
+        channel_layer = get_channel_layer()
+
+        # Broadcast the new message to the chat room group (same as WS path)
+        async_to_sync(channel_layer.group_send)(
+            f'chat_{conversation_id}',
+            {
+                'type': 'chat_message',
+                'message_id': message.id,
+                'content': content,
+                'sender_id': request.user.id,
+                'sender_name': request.user.get_full_name(),
+                'created_at': message.created_at.isoformat(),
+            }
+        )
+
+        # Broadcast unread count update to recipient's notification socket
+        unread_count = Message.objects.filter(
+            conversation__id=conversation_id,
+            is_read=False
+        ).exclude(sender__id=recipient.id).count()
+
+        async_to_sync(channel_layer.group_send)(
+            f'notifications_{recipient.id}',
+            {
+                'type': 'send_notification',
+                'data': {
+                    'type': 'unread_count',
+                    'conversation_id': conversation_id,
+                    'unread_count': unread_count,
+                }
+            }
+        )
+
+        # Trigger FCM push notification via Celery (same as WS path)
+        from notifications_app.tasks import send_notification_task
+        sender_name = request.user.get_full_name() or request.user.email
+        send_notification_task.delay(
+            recipient.id,
+            'New Message',
+            f'{sender_name} sent you a message',
+            {'type': 'message', 'conversation_id': str(conversation_id)}
+        )
+
         serializer = MessageSerializer(message)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
