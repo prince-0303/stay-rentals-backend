@@ -28,3 +28,4 @@ jobs:
             cd /home/ubuntu/stay-rentals-backend/backend_service
             git pull origin main
             sudo docker compose up -d --build web celery_worker celery_beat
+            sudo docker compose restart nginx
