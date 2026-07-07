@@ -3,7 +3,6 @@ import asyncio
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
 from .models import Conversation, Message
-from .encryption import encrypt_message
 
 
 class ChatConsumer(AsyncWebsocketConsumer):
@@ -111,7 +110,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
         message = Message.objects.create(
             conversation=conv,
             sender=self.user,
-            content=encrypt_message(content)
+            content=content
         )
         return message
 

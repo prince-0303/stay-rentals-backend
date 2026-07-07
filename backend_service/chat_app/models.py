@@ -30,5 +30,11 @@ class Message(models.Model):
         db_table = 'messages'
         ordering = ['created_at']
 
+    def save(self, *args, **kwargs):
+        if self._state.adding:
+            from .encryption import encrypt_message
+            self.content = encrypt_message(self.content)
+        super().save(*args, **kwargs)
+
     def __str__(self):
         return f"{self.sender.get_full_name()}: {self.content[:50]}"
